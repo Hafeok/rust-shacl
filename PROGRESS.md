@@ -20,21 +20,30 @@ should have green tests before the next. Status legend: ✅ done · 🟡 in prog
    - Model AST present. Ingestion (Turtle → Shape set) not yet written.
 2. ✅ **closure helper** + property tests (the provable core, REQ-PATH-7/9). Migrated to `IndexSet`; 7
    tests green (oracle/idempotence/termination + plus/star edge cases).
-3. ⬜ **shacl-oxigraph** in-memory `RdfGraph` (`MemGraph` present) + `oxigraph::Store` adapter.
-4. ⬜ **value nodes / paths** (§4, §5) over RdfGraph; pass `path/*` suite. `path::reach` present.
-5. ⬜ **report builders** (§6.7) — in-memory model present; RDF serialization pending.
-6. ⬜ **CMP-NODEKIND** (done as validator) — wire validator dispatch + engine end-to-end.
-7. ⬜ **CMP-CLASS, CMP-DATATYPE** (sketch/stub) — finish `is_shacl_instance` + oxsdatatypes lexical.
+3. ✅ **shacl-oxigraph** in-memory `RdfGraph` (`MemGraph`). ⬜ `oxigraph::Store` adapter still to add.
+4. ✅ **value nodes / paths** (§4, §5) over RdfGraph. `value_nodes()` added; `reach` exercised by 10
+   integration tests in `shacl-oxigraph/tests/path_eval.rs` (all seven path kinds + cyclic-data).
+5. 🟡 **report builders** (§6.7) — in-memory model + `conforms()` work; RDF serialization pending.
+6. ✅ **Engine end-to-end** (`engine.rs`): targets → value nodes → `dispatch` → report. CMP-NODEKIND
+   wired; 8 engine tests in `shacl-oxigraph/tests/engine.rs`.
+7. ✅ **CMP-CLASS, CMP-DATATYPE** — `is_shacl_instance` (subclass walk) drives class; datatype now
+   does full lexical validation via `oxsdatatypes` (REQ-DATATYPE-2). Both green.
 8. ⬜ Remaining §7 components: cardinality → range → string → pair → logical → shape → list → other.
 9. ⬜ **shacl-sparql** (§8): prefixes → constraints → components → prebinding seam (ADR-008). All stubs.
 10. ⬜ **conformance matrix** + W3C 1.2 testsuite runner (§10). `shacl-testsuite` is a stub.
 
-## Cross-cutting pieces still missing
-- ⬜ The validation **engine**: shape → targets (§6, REQ-TGT-*) → value nodes (§5) → dispatch
-  constraints → assemble `ValidationReport`. (Nothing ties the validator trait to a run yet.)
-- ⬜ Target resolution (REQ-TGT-1..7), incl. `sh:targetWhere` naive iteration (ADR-007).
+## Cross-cutting pieces
+- ✅ The validation **engine** (`engine::validate`): shape → targets → value nodes → dispatch → report.
+- 🟡 Target resolution: `sh:targetNode/targetClass/implicitClass/targetSubjectsOf/targetObjectsOf`
+  done (REQ-TGT-1/2/3/4). ⬜ `sh:targetWhere` (REQ-TGT-5, naive iter ADR-007) and explicit `sh:shape`
+  data-graph targets (REQ-TGT-6) need a shape registry — deferred.
 - ⬜ Shapes-graph ingestion (parse Turtle → `Shape`s, REQ-ING-1..10), ill-formedness detection.
 - ⬜ Recursion / cycle detection (Tarjan SCC, §9.1, ADR-002) before logical/shape components.
+- ⬜ `sh:message` → `sh:resultMessage` copying (REQ-ING-9); results currently carry empty messages.
+
+## Known gaps logged during implementation
+- Derived integer datatypes (xsd:byte/int/short/unsigned*) are lexically validated as xsd:integer;
+  numeric range bounds not yet enforced (`lexical_valid` in `constraints/value_type.rs`).
 
 ## Notes / decisions taken during implementation
 - `NodeSet = IndexSet<Term>` (not `BTreeSet`) because oxrdf `Term: !Ord`. Determinism comes from

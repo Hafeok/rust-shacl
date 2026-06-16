@@ -73,6 +73,53 @@ pub struct PropertyShape {
     pub deactivated: bool,
 }
 
+impl Shape {
+    /// Shape identity (`sh:sourceShape`, §6.7.2.4).
+    #[must_use]
+    pub fn id(&self) -> &ShapeId {
+        match self {
+            Shape::Node(n) => &n.id,
+            Shape::Property(p) => &p.id,
+        }
+    }
+
+    /// Target declarations on this shape (§3.1.3).
+    #[must_use]
+    pub fn targets(&self) -> &[crate::target::Target] {
+        match self {
+            Shape::Node(n) => &n.targets,
+            Shape::Property(p) => &p.targets,
+        }
+    }
+
+    /// Declared constraints on this shape (§3.1.1).
+    #[must_use]
+    pub fn constraints(&self) -> &[Constraint] {
+        match self {
+            Shape::Node(n) => &n.constraints,
+            Shape::Property(p) => &p.constraints,
+        }
+    }
+
+    /// Effective shape severity (§3.1.4); the default unless a constraint overrides it.
+    #[must_use]
+    pub fn severity(&self) -> Severity {
+        match self {
+            Shape::Node(n) => n.severity,
+            Shape::Property(p) => p.severity,
+        }
+    }
+
+    /// Whether the whole shape is deactivated (`sh:deactivated`, `REQ-ING-10`).
+    #[must_use]
+    pub fn deactivated(&self) -> bool {
+        match self {
+            Shape::Node(n) => n.deactivated,
+            Shape::Property(p) => p.deactivated,
+        }
+    }
+}
+
 /// One declared constraint: a component plus its parameter values (§3.1.1). The engine dispatches
 /// on `component` to the matching `Validator` (§11.3). Per-constraint severity/message/deactivation
 /// (the RDF 1.2 reifier annotations, §3.1.4–6) ride along here.

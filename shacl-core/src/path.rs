@@ -59,18 +59,14 @@ fn eval<G: RdfGraph + ?Sized>(graph: &G, start: &Term, path: &Path) -> NodeSet {
         }
 
         // ⟦zeroOrMore(p)⟧ = reflexive-transitive closure of the one-step relation. REQ-PATH-7.
-        Path::ZeroOrMore(inner) => {
-            reachable_star(start.clone(), |n: &Term| {
-                eval(graph, n, inner).into_iter().collect::<Vec<_>>()
-            })
-        }
+        Path::ZeroOrMore(inner) => reachable_star(start.clone(), |n: &Term| {
+            eval(graph, n, inner).into_iter().collect::<Vec<_>>()
+        }),
 
         // ⟦oneOrMore(p)⟧ = transitive closure. REQ-PATH-7.
-        Path::OneOrMore(inner) => {
-            reachable_plus(start.clone(), |n: &Term| {
-                eval(graph, n, inner).into_iter().collect::<Vec<_>>()
-            })
-        }
+        Path::OneOrMore(inner) => reachable_plus(start.clone(), |n: &Term| {
+            eval(graph, n, inner).into_iter().collect::<Vec<_>>()
+        }),
 
         // ⟦zeroOrOne(p)⟧ = Δ ∪ ⟦p⟧. REQ-PATH-4.
         Path::ZeroOrOne(inner) => {
@@ -124,7 +120,10 @@ fn invert_general<G: RdfGraph + ?Sized>(graph: &G, start: &Term, inner: &Path) -
         // ^^p = p
         Path::Inverse(p) => eval(graph, start, p),
         _ => {
-            debug_assert!(false, "inverse of {inner:?} not yet supported (REQ-PATH-4 partial)");
+            debug_assert!(
+                false,
+                "inverse of {inner:?} not yet supported (REQ-PATH-4 partial)"
+            );
             NodeSet::new()
         }
     }

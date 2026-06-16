@@ -7,10 +7,10 @@
 //! feature so that triple terms and reifiers (needed for SHACL 1.2 `{| … |}` annotation of
 //! severity/message/deactivation, §3.1.4–6) are available without a hand-rolled model.
 
-pub mod term;
 pub mod path;
 pub mod shape;
 pub mod target;
+pub mod term;
 
 pub use path::Path;
 pub use shape::{NodeShape, PropertyShape, Shape, ShapeId};

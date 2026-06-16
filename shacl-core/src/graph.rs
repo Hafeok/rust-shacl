@@ -43,7 +43,6 @@ pub trait RdfGraph {
             .map(|t| t.object)
             .collect()
     }
-
 }
 
 /// Optional backend capability: push a whole path closure down as one native query (ADR-003,

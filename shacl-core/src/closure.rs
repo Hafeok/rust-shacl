@@ -159,7 +159,10 @@ mod tests {
         let step = |n: &u8| edges.get(n).cloned().unwrap_or_default();
         assert_eq!(sorted(reachable_plus(1u8, step)), BTreeSet::from([2, 3]));
         let step2 = |n: &u8| edges.get(n).cloned().unwrap_or_default();
-        assert_eq!(sorted(reachable_star(1u8, step2)), BTreeSet::from([1, 2, 3]));
+        assert_eq!(
+            sorted(reachable_star(1u8, step2)),
+            BTreeSet::from([1, 2, 3])
+        );
     }
 
     #[test]

@@ -16,9 +16,11 @@ fn comp(name: &str) -> NamedNode {
     NamedNode::new_unchecked(format!("{SH}{name}"))
 }
 
-fn result_for(ctx: &Ctx<'_, impl RdfGraph>, value: Option<Term>, component: NamedNode)
-    -> ValidationResult
-{
+fn result_for(
+    ctx: &Ctx<'_, impl RdfGraph>,
+    value: Option<Term>,
+    component: NamedNode,
+) -> ValidationResult {
     ValidationResult {
         focus_node: ctx.focus.clone(),
         result_path: ctx.path_sparql.clone(),
@@ -55,7 +57,11 @@ impl<G: RdfGraph> Validator<G> for NodeKindValidator {
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
             if !self.kind.admits(v) {
-                out.push(result_for(ctx, Some(v.clone()), comp("NodeKindConstraintComponent")));
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("NodeKindConstraintComponent"),
+                ));
             }
         }
     }
@@ -80,22 +86,27 @@ impl<G: RdfGraph> Validator<G> for ClassValidator {
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
             if !crate::constraints::helpers::is_shacl_instance(ctx.graph, v, &self.class) {
-                out.push(result_for(ctx, Some(v.clone()), comp("ClassConstraintComponent")));
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("ClassConstraintComponent"),
+                ));
             }
         }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CMP-DATATYPE — sh:datatype (§7.1.2). STUB — REQ-DATATYPE-2 lexical check via oxsdatatypes.
+// CMP-DATATYPE — sh:datatype (§7.1.2). FULLY IMPLEMENTED (ADR-010).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// `sh:DatatypeConstraintComponent`. `REQ-DATATYPE-1..4`.
 ///
-/// TODO (ADR-010): conformance requires BOTH (a) value is a literal whose datatype IRI equals
-/// `self.datatype`, AND (b) the lexical form is valid for that datatype (`REQ-DATATYPE-2`). (b)
-/// must use `oxsdatatypes` lexical/value-space parsing, not a naive IRI match. Stubbed until the
-/// engine wiring lands so the first end-to-end test goes through NodeKind.
+/// A value node conforms iff it is a literal whose datatype IRI equals [`Self::datatype`]
+/// (`REQ-DATATYPE-1`) **and** whose lexical form is valid for that datatype (`REQ-DATATYPE-2`,
+/// checked via [`oxsdatatypes`]). The language-tag rules (`REQ-DATATYPE-4`) fall out of the datatype
+/// IRI comparison: a language-tagged literal has datatype `rdf:langString`, so it matches only when
+/// `sh:datatype` is `rdf:langString`, and an `xsd:*`-typed literal never carries a language tag.
 pub struct DatatypeValidator {
     /// The required datatype IRI (`REQ-DATATYPE-3`: exactly one).
     pub datatype: NamedNode,
@@ -110,16 +121,65 @@ impl<G: RdfGraph> Validator<G> for DatatypeValidator {
         for v in value_nodes {
             let conforms = match v {
                 Term::Literal(lit) => {
-                    let dt_matches = lit.datatype().as_str() == self.datatype.as_str();
-                    // TODO REQ-DATATYPE-2: && oxsdatatypes lexical validity of lit.value() for dt.
-                    dt_matches
+                    lit.datatype().as_str() == self.datatype.as_str()
+                        && lexical_valid(lit.value(), &self.datatype)
                 }
-                _ => false,
+                _ => false, // REQ-DATATYPE-1: non-literals never conform.
             };
             if !conforms {
-                out.push(result_for(ctx, Some(v.clone()), comp("DatatypeConstraintComponent")));
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("DatatypeConstraintComponent"),
+                ));
             }
         }
+    }
+}
+
+/// Is `value` a valid lexical form for the datatype `dt`? (`REQ-DATATYPE-2`, ADR-010.)
+///
+/// XSD value-space membership is delegated to `oxsdatatypes`' `FromStr` parsers. Datatypes outside
+/// the modelled XSD set — the string family (`xsd:string`, `xsd:token`, `xsd:anyURI`, …) and any
+/// non-XSD datatype (`rdf:langString`, `rdf:HTML`, custom IRIs) — have no lexical constraint we can
+/// check here and are accepted. NOTE: derived integer types are validated as `xsd:integer`, so their
+/// numeric *range* bounds (e.g. `xsd:byte` ∈ −128..=127) are not yet enforced — a documented gap.
+fn lexical_valid(value: &str, dt: &NamedNode) -> bool {
+    use oxsdatatypes::{
+        Boolean, Date, DateTime, DayTimeDuration, Decimal, Double, Duration, Float, GDay, GMonth,
+        GMonthDay, GYear, GYearMonth, Integer, Time, YearMonthDuration,
+    };
+    const XSD: &str = "http://www.w3.org/2001/XMLSchema#";
+    let Some(local) = dt.as_str().strip_prefix(XSD) else {
+        return true; // non-XSD datatype: no lexical space we model.
+    };
+    macro_rules! parses {
+        ($t:ty) => {
+            value.parse::<$t>().is_ok()
+        };
+    }
+    match local {
+        "boolean" => parses!(Boolean),
+        "decimal" => parses!(Decimal),
+        "integer" | "long" | "int" | "short" | "byte" | "nonNegativeInteger"
+        | "positiveInteger" | "nonPositiveInteger" | "negativeInteger" | "unsignedLong"
+        | "unsignedInt" | "unsignedShort" | "unsignedByte" => parses!(Integer),
+        "float" => parses!(Float),
+        "double" => parses!(Double),
+        "dateTime" | "dateTimeStamp" => parses!(DateTime),
+        "date" => parses!(Date),
+        "time" => parses!(Time),
+        "gYear" => parses!(GYear),
+        "gYearMonth" => parses!(GYearMonth),
+        "gMonth" => parses!(GMonth),
+        "gMonthDay" => parses!(GMonthDay),
+        "gDay" => parses!(GDay),
+        "duration" => parses!(Duration),
+        "dayTimeDuration" => parses!(DayTimeDuration),
+        "yearMonthDuration" => parses!(YearMonthDuration),
+        // string-family XSD types (string, normalizedString, token, language, Name, anyURI, …):
+        // any lexical form is admissible at this layer.
+        _ => true,
     }
 }
 

@@ -19,7 +19,11 @@ impl MemGraph {
     }
     /// Insert a triple.
     pub fn insert(&mut self, subject: Term, predicate: NamedNode, object: Term) {
-        self.triples.push(Triple { subject, predicate, object });
+        self.triples.push(Triple {
+            subject,
+            predicate,
+            object,
+        });
     }
 }
 

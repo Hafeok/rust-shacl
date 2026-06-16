@@ -6,7 +6,7 @@
 
 #![allow(missing_docs)] // stubs below; fill from §8 packets.
 
-pub mod prefixes; // REQ-SPQ-13: sh:prefixes/owl:imports*/sh:declare collection
-pub mod constraint; // §8.1 sh:sparql / SELECT constraints
 pub mod component; // §8.2 SPARQL-based constraint components (SELECT/ASK validators)
-pub mod prebind; // §8.4 Values-Insertion pre-binding (Feature-at-Risk, ADR-008)
+pub mod constraint; // §8.1 sh:sparql / SELECT constraints
+pub mod prebind;
+pub mod prefixes; // REQ-SPQ-13: sh:prefixes/owl:imports*/sh:declare collection // §8.4 Values-Insertion pre-binding (Feature-at-Risk, ADR-008)

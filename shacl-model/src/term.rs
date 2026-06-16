@@ -29,6 +29,22 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
+    /// Parse one of the six `sh:NodeKind` IRIs into a [`NodeKind`] (`REQ-NODEKIND-2`). Any other IRI
+    /// yields `None` → the `sh:nodeKind` constraint is ill-formed.
+    #[must_use]
+    pub fn from_iri(iri: &NamedNode) -> Option<NodeKind> {
+        const SH: &str = "http://www.w3.org/ns/shacl#";
+        match iri.as_str().strip_prefix(SH)? {
+            "IRI" => Some(NodeKind::Iri),
+            "BlankNode" => Some(NodeKind::BlankNode),
+            "Literal" => Some(NodeKind::Literal),
+            "BlankNodeOrIRI" => Some(NodeKind::BlankNodeOrIri),
+            "BlankNodeOrLiteral" => Some(NodeKind::BlankNodeOrLiteral),
+            "IRIOrLiteral" => Some(NodeKind::IriOrLiteral),
+            _ => None,
+        }
+    }
+
     /// True iff `term`'s kind is admitted by this node kind. `REQ-NODEKIND-1`.
     #[must_use]
     pub fn admits(self, term: &Term) -> bool {

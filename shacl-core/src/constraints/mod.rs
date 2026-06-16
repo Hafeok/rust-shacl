@@ -16,3 +16,57 @@ pub mod value_type;
 // pub mod other;         // §7.9
 
 pub mod helpers;
+
+use crate::graph::RdfGraph;
+use crate::validator::Validator;
+use shacl_model::shape::Constraint;
+use shacl_model::term::{NamedNode, NodeKind, Term};
+
+/// SHACL namespace.
+const SH: &str = "http://www.w3.org/ns/shacl#";
+
+/// Build the [`Validator`]s for one declared constraint (the §7 dispatch table).
+///
+/// Returns possibly *several* validators when a single-parameter component repeats (independent
+/// conjunctive constraints, `REQ-ING-4`/`REQ-CLASS-4`), exactly one for a well-formed
+/// single-valued component, or none when the component IRI is unknown (the constraint is ignored,
+/// per the open-world dispatch) or the parameter is ill-formed. Adding a component means adding one
+/// arm here plus its `Validator` impl — nothing else in the engine changes.
+#[must_use]
+pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
+    let comp = c.component.as_str();
+    match comp.strip_prefix(SH).unwrap_or(comp) {
+        // §7.1.3 — sh:nodeKind. Exactly one valid kind IRI (REQ-NODEKIND-2/3).
+        "NodeKindConstraintComponent" => param_iris(c, "nodeKind")
+            .into_iter()
+            .filter_map(|iri| NodeKind::from_iri(&iri))
+            .map(|kind| Box::new(value_type::NodeKindValidator { kind }) as Box<dyn Validator<G>>)
+            .collect(),
+        // §7.1.1 — sh:class. May repeat → one validator per value (REQ-CLASS-4).
+        "ClassConstraintComponent" => param_iris(c, "class")
+            .into_iter()
+            .map(|class| Box::new(value_type::ClassValidator { class }) as Box<dyn Validator<G>>)
+            .collect(),
+        // §7.1.2 — sh:datatype. Exactly one (REQ-DATATYPE-3).
+        "DatatypeConstraintComponent" => param_iris(c, "datatype")
+            .into_iter()
+            .map(|datatype| {
+                Box::new(value_type::DatatypeValidator { datatype }) as Box<dyn Validator<G>>
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The IRI values bound to parameter `sh:<local>` on a constraint, in declaration order.
+fn param_iris(c: &Constraint, local: &str) -> Vec<NamedNode> {
+    let pred = format!("{SH}{local}");
+    c.params
+        .iter()
+        .filter(|(p, _)| p.as_str() == pred)
+        .filter_map(|(_, v)| match v {
+            Term::NamedNode(n) => Some(n.clone()),
+            _ => None,
+        })
+        .collect()
+}
