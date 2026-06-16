@@ -1,0 +1,14 @@
+# shacl-model — shape/path AST + term re-export. Spec: REQ-ING-*, REQ-TERM-*, §3, §4 AST.
+# No backend dependency; depends only on the term layer.
+[package]
+name = "shacl-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+oxrdf.workspace = true
+
+[lints]
+workspace = true

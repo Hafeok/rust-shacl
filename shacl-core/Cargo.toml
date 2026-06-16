@@ -1,0 +1,21 @@
+# shacl-core — validation engine generic over RdfGraph. Spec: §4, §5, §6, §7 (REQ-PATH/TGT/RPT/CMP).
+# REQ-ARCH-1: this crate MUST NOT depend on oxigraph. Verified by `cargo tree -p shacl-core`.
+[package]
+name = "shacl-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+shacl-model.workspace = true
+oxrdf.workspace = true
+oxsdatatypes.workspace = true   # ADR-010: sh:datatype lexical validation
+fancy-regex.workspace = true    # ADR-005: sh:pattern
+indexmap.workspace = true       # NodeSet: deterministic set without requiring Term: Ord
+
+[dev-dependencies]
+proptest = "1"                  # REQ-PATH-9: property tests for the closure fixpoint
+
+[lints]
+workspace = true

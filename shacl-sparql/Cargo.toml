@@ -1,0 +1,15 @@
+# shacl-sparql — SHACL-SPARQL (§8, REQ-SPQ-*). Generic over SparqlGraph; no concrete engine.
+[package]
+name = "shacl-sparql"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+shacl-model.workspace = true
+shacl-core.workspace = true
+oxrdf.workspace = true
+
+[lints]
+workspace = true

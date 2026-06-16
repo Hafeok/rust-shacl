@@ -1,0 +1,23 @@
+# shacl-testsuite — W3C 1.2 manifest runner + pySHACL diff harness (§10.1, REQ-TS-*).
+# Binary target; picks the oxigraph backend.
+[package]
+name = "shacl-testsuite"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "shacl-testsuite"
+path = "src/main.rs"
+
+[dependencies]
+shacl-model.workspace = true
+shacl-core.workspace = true
+shacl-sparql.workspace = true
+shacl-oxigraph.workspace = true
+oxrdf.workspace = true
+oxttl.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+# shacl-oxigraph — the ONLY crate that depends on oxigraph. Implements RdfGraph + SparqlGraph
+# for oxigraph::Store, and an in-memory RdfGraph for tests (build step 3, §11.5).
+[package]
+name = "shacl-oxigraph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+shacl-model.workspace = true
+shacl-core.workspace = true
+shacl-sparql.workspace = true
+oxrdf.workspace = true
+oxigraph.workspace = true
+oxttl.workspace = true          # ADR-009: Turtle 1.2 shapes-graph parsing
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+/target
+# Library-dominated workspace: don't commit the lockfile (git ignores inline `#` comments, so this
+# must be on its own line — the original inline comment silently disabled the rule).
+Cargo.lock
+**/*.rs.bk
+# Windows "mark of the web" artifacts created when copying files from WSL/Windows
+*:Zone.Identifier

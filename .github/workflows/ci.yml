@@ -1,0 +1,33 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85
+        with: { components: clippy, rustfmt }
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      # REQ-ARCH-1: shacl-core must not depend on oxigraph. Fail the build if it ever does.
+      - name: enforce core/oxigraph decoupling (REQ-ARCH-1)
+        run: |
+          if cargo tree -p shacl-core -i oxigraph 2>/dev/null | grep -q oxigraph; then
+            echo "REQ-ARCH-1 VIOLATION: shacl-core depends on oxigraph"; exit 1
+          fi
+      - name: enforce Stable Dependencies Principle (ADR-011)
+        run: |
+          python3 - <<'PY'
+          dep={"shacl-model":[],"shacl-core":["shacl-model"],
+               "shacl-sparql":["shacl-model","shacl-core"],
+               "shacl-oxigraph":["shacl-model","shacl-core","shacl-sparql"],
+               "shacl-testsuite":["shacl-model","shacl-core","shacl-sparql","shacl-oxigraph"]}
+          cs=list(dep); Ce={c:len(dep[c]) for c in cs}
+          Ca={c:sum(c in dep[o] for o in cs) for c in cs}
+          I={c:(Ce[c]/(Ca[c]+Ce[c]) if Ca[c]+Ce[c] else 0.0) for c in cs}
+          bad=[(c,d) for c in cs for d in dep[c] if I[d] > I[c]+1e-9]
+          if bad:
+              print("SDP VIOLATION (ADR-011):",bad); raise SystemExit(1)
+          print("SDP OK:",{c:round(I[c],2) for c in cs})
+          PY

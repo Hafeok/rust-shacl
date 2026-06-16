@@ -1,0 +1,49 @@
+# shacl-rs workspace — see shacl-rs-functional-spec.md §11.1
+# Build order (§11.5): model → closure → oxigraph backend → paths → report → components → sparql → testsuite
+[workspace]
+resolver = "2"
+members = [
+    "shacl-model",
+    "shacl-core",
+    "shacl-sparql",
+    "shacl-oxigraph",
+    "shacl-testsuite",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.87"  # MSRV floor: oxigraph 0.5.x / oxrdf 0.3.x require rustc 1.87
+license = "MIT OR Apache-2.0"
+repository = "https://example.com/shacl-rs"
+
+[workspace.dependencies]
+# Term layer — ADR-004: re-export oxrdf with rdf-12 (triple terms / reifiers for SHACL 1.2 §3.1.4-6).
+# ADR-001/009: track the changelog (crate is pre-1.0 and moving). NOTE: oxrdf/oxttl are
+# versioned independently of the oxigraph crate — oxigraph 0.5.x pins oxrdf 0.3.x / oxttl 0.2.x.
+oxrdf = { version = "0.3", features = ["rdf-12"] }
+# Turtle 1.2 parsing incl. {| |} annotation syntax — ADR-009.
+oxttl = { version = "0.2", features = ["rdf-12"] }
+# SPARQL engine backend (shacl-oxigraph only — MUST NOT appear in shacl-core; REQ-ARCH-1).
+# default-features = false drops the `rocksdb` default feature (oxrocksdb-sys → bindgen → libclang,
+# a C++/system toolchain we don't need): SHACL validation runs over the in-memory Store + SPARQL eval.
+oxigraph = { version = "0.5", default-features = false, features = ["rdf-12"] }
+# XSD lexical/value-space validation for sh:datatype — ADR-010, REQ-DATATYPE-2.
+oxsdatatypes = "0.2"
+# sh:pattern needs XPath/SPARQL REGEX semantics; std `regex` diverges — ADR-005.
+fancy-regex = "0.13"
+# Deterministic, insertion-ordered set for NodeSet — oxrdf `Term` is Hash+Eq but not Ord, so
+# BTreeSet is unavailable; IndexSet preserves the "dedup + reproducible order" intent (§4.1 NodeSet).
+indexmap = "2"
+# Internal deps
+shacl-model = { path = "shacl-model" }
+shacl-core = { path = "shacl-core" }
+shacl-sparql = { path = "shacl-sparql" }
+shacl-oxigraph = { path = "shacl-oxigraph" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
