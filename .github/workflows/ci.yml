@@ -6,7 +6,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # MSRV: oxigraph 0.5.x / oxrdf 0.3.x require rustc 1.87 (matches rust-toolchain.toml).
-      - uses: dtolnay/rust-toolchain@1.87
+      - uses: dtolnay/rust-toolchain@1.100
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
