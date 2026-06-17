@@ -286,13 +286,17 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .into_iter()
             .map(|root| Box::new(value_type::RootClassValidator { root }) as Box<dyn Validator<G>>)
             .collect(),
-        // §7.9.5 — sh:uniqueValuesFor (a property's values are unique across the shape's foci).
-        "UniqueValuesForConstraintComponent" => param_iris(c, "uniqueValuesFor")
-            .into_iter()
-            .map(|property| {
-                Box::new(other::UniqueValuesForValidator { property }) as Box<dyn Validator<G>>
-            })
-            .collect(),
+        // §7.9.5 — sh:uniqueValuesFor (the property — or 1.2 property list — value tuple is unique
+        // across the shape's foci).
+        "UniqueValuesForConstraintComponent" => {
+            let properties = param_iris(c, "uniqueValuesFor");
+            if properties.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(other::UniqueValuesForValidator { properties })
+                    as Box<dyn Validator<G>>]
+            }
+        }
 
         // §7.9.1 — sh:closed (+ sh:ignoredProperties). Value is `true` (closure over the shape's own
         // properties) or, in 1.2, `sh:ByTypes` (closure over the focus node's types' shapes).

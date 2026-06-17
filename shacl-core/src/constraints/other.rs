@@ -179,12 +179,39 @@ impl<G: RdfGraph> Validator<G> for ClosedValidator {
     }
 }
 
-/// `sh:UniqueValuesForConstraintComponent` (§7.9.5). Across the shape's focus nodes, the values of
-/// the given property must be unique. For the current focus, each *other* focus node that shares at
-/// least one value yields a result whose `sh:value` is that other focus node.
+/// `sh:UniqueValuesForConstraintComponent` (§7.9.5). Across the shape's focus nodes, the
+/// *combination* of values of the given properties must be unique. With a single property this is
+/// plain value-uniqueness; with a 1.2 list of properties the key is the tuple of one value from each
+/// (the cartesian product). For the current focus, each *other* focus that shares a tuple yields a
+/// result whose `sh:value` is that other focus node.
 pub struct UniqueValuesForValidator {
-    /// The property whose values must be unique across focus nodes.
-    pub property: NamedNode,
+    /// The properties whose value-tuples must be unique across focus nodes.
+    pub properties: Vec<NamedNode>,
+}
+
+impl UniqueValuesForValidator {
+    /// The set of value tuples (one value per property, cartesian product) for `focus`. Empty if any
+    /// property has no value (the focus then has no complete key).
+    fn tuples<G: RdfGraph>(&self, graph: &G, focus: &Term) -> Vec<Vec<Term>> {
+        let mut acc: Vec<Vec<Term>> = vec![Vec::new()];
+        for p in &self.properties {
+            let vals: Vec<Term> = graph.objects(focus, p).into_iter().collect();
+            if vals.is_empty() {
+                return Vec::new();
+            }
+            acc = acc
+                .iter()
+                .flat_map(|prefix| {
+                    vals.iter().map(move |v| {
+                        let mut t = prefix.clone();
+                        t.push(v.clone());
+                        t
+                    })
+                })
+                .collect();
+        }
+        acc
+    }
 }
 
 impl<G: RdfGraph> Validator<G> for UniqueValuesForValidator {
@@ -192,8 +219,8 @@ impl<G: RdfGraph> Validator<G> for UniqueValuesForValidator {
         NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#UniqueValuesForConstraintComponent")
     }
     fn validate(&self, _value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
-        let my_values = ctx.graph.objects(ctx.focus, &self.property);
-        if my_values.is_empty() {
+        let my_tuples = self.tuples(ctx.graph, ctx.focus);
+        if my_tuples.is_empty() {
             return;
         }
         // Recompute the shape's focus set to compare against the other focus nodes (cross-focus
@@ -202,12 +229,8 @@ impl<G: RdfGraph> Validator<G> for UniqueValuesForValidator {
             if &other == ctx.focus {
                 continue;
             }
-            let shares = ctx
-                .graph
-                .objects(&other, &self.property)
-                .iter()
-                .any(|v| my_values.contains(v));
-            if shares {
+            let other_tuples = self.tuples(ctx.graph, &other);
+            if my_tuples.iter().any(|t| other_tuples.contains(t)) {
                 out.push(result_for(
                     ctx,
                     Some(other),

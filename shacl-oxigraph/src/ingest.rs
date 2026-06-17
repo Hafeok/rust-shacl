@@ -110,6 +110,8 @@ const MAYBE_LIST_PARAMS: &[&str] = &[
     "subsetOf",
     "lessThan",
     "lessThanOrEquals",
+    // sh:uniqueValuesFor: a single property or a 1.2 list of properties (tuple uniqueness).
+    "uniqueValuesFor",
 ];
 
 /// Parse a Turtle 1.2 document into its shapes (`REQ-ING-1..10`). Returns the parse error message on
