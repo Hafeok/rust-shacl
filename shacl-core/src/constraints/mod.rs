@@ -269,6 +269,13 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .into_iter()
             .map(|root| Box::new(value_type::RootClassValidator { root }) as Box<dyn Validator<G>>)
             .collect(),
+        // §7.9.5 — sh:uniqueValuesFor (a property's values are unique across the shape's foci).
+        "UniqueValuesForConstraintComponent" => param_iris(c, "uniqueValuesFor")
+            .into_iter()
+            .map(|property| {
+                Box::new(other::UniqueValuesForValidator { property }) as Box<dyn Validator<G>>
+            })
+            .collect(),
 
         // §7.9.1 — sh:closed (+ sh:ignoredProperties).
         "ClosedConstraintComponent" => match param_bool(c, "closed") {

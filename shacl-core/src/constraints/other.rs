@@ -1,12 +1,10 @@
-//! Remaining §7.9 components that need cross-constraint context. Currently `sh:closed` (§7.9.1):
-//! the focus node may only use predicates that appear as the predicate path of one of the shape's
-//! own `sh:property` constraints, plus those listed in `sh:ignoredProperties`.
-//!
-//! `sh:rootClass` (§7.9.4) and `sh:uniqueValuesFor` (§7.9.5) are new-in-1.2 and under-specified in
-//! the current draft; they are intentionally not implemented (tracked as known gaps).
+//! Remaining §7.9 components that need cross-constraint or cross-focus context: `sh:closed`
+//! (§7.9.1, the focus may only use predicates declared by the shape's `sh:property` shapes plus
+//! `sh:ignoredProperties`) and `sh:uniqueValuesFor` (§7.9.5, a property's values must be unique
+//! across the shape's focus nodes). `sh:rootClass` (§7.9.4) lives in `value_type`.
 
-use super::comp;
-use crate::engine::{lookup, term_to_shape_id};
+use super::{comp, result_for};
+use crate::engine::{focus_nodes, lookup, term_to_shape_id};
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
 use crate::validator::{Ctx, Validator};
@@ -79,6 +77,45 @@ impl<G: RdfGraph> Validator<G> for ClosedValidator {
                 severity: ctx.severity,
                 messages: Vec::new(),
             });
+        }
+    }
+}
+
+/// `sh:UniqueValuesForConstraintComponent` (§7.9.5). Across the shape's focus nodes, the values of
+/// the given property must be unique. For the current focus, each *other* focus node that shares at
+/// least one value yields a result whose `sh:value` is that other focus node.
+pub struct UniqueValuesForValidator {
+    /// The property whose values must be unique across focus nodes.
+    pub property: NamedNode,
+}
+
+impl<G: RdfGraph> Validator<G> for UniqueValuesForValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#UniqueValuesForConstraintComponent")
+    }
+    fn validate(&self, _value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        let my_values = ctx.graph.objects(ctx.focus, &self.property);
+        if my_values.is_empty() {
+            return;
+        }
+        // Recompute the shape's focus set to compare against the other focus nodes (cross-focus
+        // constraint; O(n) per focus is acceptable for the conformance suite).
+        for other in focus_nodes(ctx.graph, ctx.registry, ctx.shape) {
+            if &other == ctx.focus {
+                continue;
+            }
+            let shares = ctx
+                .graph
+                .objects(&other, &self.property)
+                .iter()
+                .any(|v| my_values.contains(v));
+            if shares {
+                out.push(result_for(
+                    ctx,
+                    Some(other),
+                    comp("UniqueValuesForConstraintComponent"),
+                ));
+            }
         }
     }
 }

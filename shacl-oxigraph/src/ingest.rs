@@ -71,6 +71,7 @@ const COMPONENTS: &[(&str, &str, &[&str])] = &[
     ("memberShape", "MemberShapeConstraintComponent", &[]),
     ("someValue", "SomeValueConstraintComponent", &[]),
     ("rootClass", "RootClassConstraintComponent", &[]),
+    ("uniqueValuesFor", "UniqueValuesForConstraintComponent", &[]),
     (
         "closed",
         "ClosedConstraintComponent",
