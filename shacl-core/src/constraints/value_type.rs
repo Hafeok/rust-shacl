@@ -15,10 +15,12 @@ use shacl_model::term::{NamedNode, NamedNodeRef, NodeKind, Term};
 // CMP-NODEKIND — sh:nodeKind (§7.1.3). FULLY IMPLEMENTED.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `sh:NodeKindConstraintComponent`. `REQ-NODEKIND-1`.
+/// `sh:NodeKindConstraintComponent`. `REQ-NODEKIND-1`. A single `sh:nodeKind` is the common case; a
+/// 1.2 list value (`sh:nodeKind ( sh:BlankNode sh:IRI )`) is a **disjunction** — a value node
+/// conforms if its kind is admitted by any listed kind.
 pub struct NodeKindValidator {
-    /// The single declared `sh:nodeKind` value (`REQ-NODEKIND-3`: exactly one).
-    pub kind: NodeKind,
+    /// The declared `sh:nodeKind` value(s); a value node conforms if **any** admits it.
+    pub kinds: Vec<NodeKind>,
 }
 
 impl<G: RdfGraph> Validator<G> for NodeKindValidator {
@@ -28,7 +30,7 @@ impl<G: RdfGraph> Validator<G> for NodeKindValidator {
 
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
-            if !self.kind.admits(v) {
+            if !self.kinds.iter().any(|k| k.admits(v)) {
                 out.push(result_for(
                     ctx,
                     Some(v.clone()),
@@ -80,8 +82,10 @@ impl<G: RdfGraph> Validator<G> for ClassValidator {
 /// IRI comparison: a language-tagged literal has datatype `rdf:langString`, so it matches only when
 /// `sh:datatype` is `rdf:langString`, and an `xsd:*`-typed literal never carries a language tag.
 pub struct DatatypeValidator {
-    /// The required datatype IRI (`REQ-DATATYPE-3`: exactly one).
-    pub datatype: NamedNode,
+    /// The required datatype IRI(s). A single value is the 1.0 case; a 1.2 list value
+    /// (`sh:datatype ( xsd:string rdf:langString )`) is a **disjunction** — a value node conforms
+    /// if it is a well-formed literal of **any** listed datatype.
+    pub datatypes: Vec<NamedNode>,
 }
 
 impl<G: RdfGraph> Validator<G> for DatatypeValidator {
@@ -92,10 +96,9 @@ impl<G: RdfGraph> Validator<G> for DatatypeValidator {
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
             let conforms = match v {
-                Term::Literal(lit) => {
-                    lit.datatype().as_str() == self.datatype.as_str()
-                        && lexical_valid(lit.value(), &self.datatype)
-                }
+                Term::Literal(lit) => self.datatypes.iter().any(|dt| {
+                    lit.datatype().as_str() == dt.as_str() && lexical_valid(lit.value(), dt)
+                }),
                 _ => false, // REQ-DATATYPE-1: non-literals never conform.
             };
             if !conforms {

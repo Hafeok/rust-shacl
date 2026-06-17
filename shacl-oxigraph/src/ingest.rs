@@ -86,8 +86,15 @@ const COMPONENTS: &[(&str, &str, &[&str])] = &[
     ),
 ];
 
-/// List-valued parameters: their object is an `rdf:List` head, flattened into the members.
+/// Always-list parameters: their object is an `rdf:List` head, flattened into the members.
 const LIST_PARAMS: &[&str] = &["in", "languageIn", "and", "or", "xone", "ignoredProperties"];
+
+/// Maybe-list parameters (1.2): each value is *either* a plain term (1.0) *or* an `rdf:List` head to
+/// flatten. `sh:datatype`/`sh:nodeKind` list members are disjuncts (dispatch builds one set-valued
+/// validator). NOTE: `sh:class` is intentionally excluded — a *list* value of `sh:class` is a
+/// disjunction (instance-of-any) whereas *repeated* `sh:class` triples are a conjunction, and the
+/// flat param model cannot tell them apart post-flattening (W3C `core/property/class-002`, a gap).
+const MAYBE_LIST_PARAMS: &[&str] = &["datatype", "nodeKind"];
 
 /// Parse a Turtle 1.2 document into its shapes (`REQ-ING-1..10`). Returns the parse error message on
 /// malformed Turtle (`REQ-ING-1` → failure).
@@ -273,7 +280,8 @@ fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
     out
 }
 
-/// The values of parameter `local` on `node`, flattening `rdf:List`s for list-valued parameters.
+/// The values of parameter `local` on `node`. Always-list params are flattened from their `rdf:List`
+/// head; maybe-list params are flattened only when the value is actually a list (else kept as-is).
 fn param_values(g: &MemGraph, node: &Term, local: &str, pred: &NamedNode) -> Vec<Term> {
     let objects: Vec<Term> = g.objects(node, pred).into_iter().collect();
     if LIST_PARAMS.contains(&local) {
@@ -281,6 +289,11 @@ fn param_values(g: &MemGraph, node: &Term, local: &str, pred: &NamedNode) -> Vec
             .iter()
             .filter_map(|head| rdf_list(g, head))
             .flatten()
+            .collect()
+    } else if MAYBE_LIST_PARAMS.contains(&local) {
+        objects
+            .into_iter()
+            .flat_map(|o| rdf_list(g, &o).unwrap_or_else(|| vec![o]))
             .collect()
     } else {
         objects

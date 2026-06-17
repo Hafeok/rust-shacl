@@ -65,24 +65,33 @@ pub(crate) fn result_for(
 pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
     let comp = c.component.as_str();
     match comp.strip_prefix(SH).unwrap_or(comp) {
-        // §7.1.3 — sh:nodeKind. Exactly one valid kind IRI (REQ-NODEKIND-2/3).
-        "NodeKindConstraintComponent" => param_iris(c, "nodeKind")
-            .into_iter()
-            .filter_map(|iri| NodeKind::from_iri(&iri))
-            .map(|kind| Box::new(value_type::NodeKindValidator { kind }) as Box<dyn Validator<G>>)
-            .collect(),
-        // §7.1.1 — sh:class. May repeat → one validator per value (REQ-CLASS-4).
+        // §7.1.3 — sh:nodeKind. One IRI, or a 1.2 list (disjunction) → one validator over the set.
+        "NodeKindConstraintComponent" => {
+            let kinds: Vec<NodeKind> = param_iris(c, "nodeKind")
+                .iter()
+                .filter_map(NodeKind::from_iri)
+                .collect();
+            if kinds.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(value_type::NodeKindValidator { kinds }) as Box<dyn Validator<G>>]
+            }
+        }
+        // §7.1.1 — sh:class. Repeats / list members are independent conjuncts (REQ-CLASS-4) → one
+        // validator per value.
         "ClassConstraintComponent" => param_iris(c, "class")
             .into_iter()
             .map(|class| Box::new(value_type::ClassValidator { class }) as Box<dyn Validator<G>>)
             .collect(),
-        // §7.1.2 — sh:datatype. Exactly one (REQ-DATATYPE-3).
-        "DatatypeConstraintComponent" => param_iris(c, "datatype")
-            .into_iter()
-            .map(|datatype| {
-                Box::new(value_type::DatatypeValidator { datatype }) as Box<dyn Validator<G>>
-            })
-            .collect(),
+        // §7.1.2 — sh:datatype. One IRI, or a 1.2 list (disjunction) → one validator over the set.
+        "DatatypeConstraintComponent" => {
+            let datatypes = param_iris(c, "datatype");
+            if datatypes.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(value_type::DatatypeValidator { datatypes }) as Box<dyn Validator<G>>]
+            }
+        }
         // §7.2.1 — sh:minCount. Exactly one integer (REQ-MINCOUNT), property shapes only.
         "MinCountConstraintComponent" => param_int(c, "minCount")
             .map(|min| Box::new(cardinality::MinCountValidator { min }) as Box<dyn Validator<G>>)
