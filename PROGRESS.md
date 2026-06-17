@@ -52,9 +52,12 @@ recursion-bearing ones gated behind the SCC guard (9b).
 - **8c. Property-pair (§7.6)** — ✅ `sh:equals` (symmetric diff), `sh:disjoint`, `sh:subsetOf`,
   `sh:lessThan`/`sh:lessThanOrEquals` (reuse `range::compare`). Paired values = objects of
   `(focus, predicate, *)`. 5 tests in `shacl-oxigraph/tests/pair.rs`.
-- **8d. List (§7.5, new in 1.2)** — `rdf:List` walker; `sh:minListLength/maxListLength/uniqueMembers`
-  no-recursion; `sh:memberShape` recurses → gate behind 9b.
-- **8e. `sh:closed`/`sh:rootClass`/`sh:uniqueValuesFor` (§7.9)** — node-level property-set checks.
+- **8d. List (§7.5, new in 1.2)** — ✅ `rdf:List` walker (cycle-safe); `sh:minListLength`,
+  `sh:maxListLength`, `sh:uniqueMembers`. `sh:memberShape` recurses → deferred to 9c (with the guard).
+  3 tests in `shacl-oxigraph/tests/list.rs`.
+- **8e. `sh:closed`/`sh:rootClass`/`sh:uniqueValuesFor` (§7.9)** — `sh:closed` needs the sibling
+  property-shape predicate set → folded into **9c** (shape registry). `sh:rootClass` /
+  `sh:uniqueValuesFor` are under-specified in the 1.2 draft → deferred, tracked under known gaps.
 
 ### Phase 9 — cross-cutting infra (interleave, not strictly after 8)
 - **9a. Report RDF serialization** (finishes step 5) — `ValidationReport → Turtle` (REQ-RPT-2/3).

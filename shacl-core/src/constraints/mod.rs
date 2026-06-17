@@ -7,6 +7,7 @@
 
 pub mod cardinality; // §7.2 — CMP-MINCOUNT (worked in spec), CMP-MAXCOUNT
 pub mod helpers;
+pub mod list; // §7.5 — CMP-LISTLEN-*, CMP-UNIQUEMEMBERS (sh:memberShape waits for the 9b guard)
 pub mod membership; // §7.9 — CMP-HASVALUE, CMP-IN
 pub mod pair; // §7.6 — CMP-PAIR-*, CMP-SUBSETOF
 pub mod range; // §7.3 — CMP-RANGE-*
@@ -14,7 +15,6 @@ pub mod string; // §7.4 — CMP-LENGTH-*, CMP-PATTERN, CMP-SINGLELINE, CMP-LANG
 pub mod value_type; // §7.1 — CMP-NODEKIND, CMP-CLASS, CMP-DATATYPE
                     // pub mod logical; // §7.7 — needs recursion guard (ADR-002) before enabling
                     // pub mod shape;   // §7.8 — needs recursion guard + shape registry
-                    // pub mod list;    // §7.5
 
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
@@ -203,6 +203,30 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
                 }) as Box<dyn Validator<G>>
             })
             .collect(),
+
+        // §7.5 — rdf:List components (sh:memberShape waits for the recursion guard, 9b).
+        "MinListLengthConstraintComponent" => param_int(c, "minListLength")
+            .map(|bound| {
+                Box::new(list::ListLengthValidator {
+                    bound,
+                    is_min: true,
+                }) as Box<dyn Validator<G>>
+            })
+            .into_iter()
+            .collect(),
+        "MaxListLengthConstraintComponent" => param_int(c, "maxListLength")
+            .map(|bound| {
+                Box::new(list::ListLengthValidator {
+                    bound,
+                    is_min: false,
+                }) as Box<dyn Validator<G>>
+            })
+            .into_iter()
+            .collect(),
+        "UniqueMembersConstraintComponent" => match param_bool(c, "uniqueMembers") {
+            Some(true) => vec![Box::new(list::UniqueMembersValidator) as Box<dyn Validator<G>>],
+            _ => Vec::new(),
+        },
 
         _ => Vec::new(),
     }
