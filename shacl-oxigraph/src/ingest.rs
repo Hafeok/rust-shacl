@@ -94,9 +94,8 @@ const LIST_PARAMS: &[&str] = &["in", "languageIn", "and", "or", "xone", "ignored
 
 /// Maybe-list parameters (1.2): each value is *either* a plain term (1.0) *or* an `rdf:List` head to
 /// flatten. `sh:datatype`/`sh:nodeKind` list members are disjuncts (dispatch builds one set-valued
-/// validator). NOTE: `sh:class` is intentionally excluded — a *list* value of `sh:class` is a
-/// disjunction (instance-of-any) whereas *repeated* `sh:class` triples are a conjunction, and the
-/// flat param model cannot tell them apart post-flattening (W3C `core/property/class-002`, a gap).
+/// validator). `sh:class` is NOT here — it is handled specially in [`parse_constraints`] because a
+/// *list* value is a disjunction while *repeated* triples are a conjunction.
 const MAYBE_LIST_PARAMS: &[&str] = &[
     "datatype",
     "nodeKind",

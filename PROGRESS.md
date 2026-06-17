@@ -106,12 +106,13 @@ SPARQL constraints into the engine dispatch (the L1 engine is `RdfGraph`-only by
 comparison (`sh:conforms` + result tuples up to blank-node renaming, REQ-TS-2); a CLI
 (`shacl-testsuite <dir>`) for an external suite checkout; and an offline CI gate over 12 vendored
 passing fixtures (`tests/fixtures/`).
-**Result against the real W3C SHACL 1.2 core suite: 101 / 141 passing (~72%).** Two bugs found and
-fixed by the suite: (1) `sh:conforms` is "no results at all", not "no Violation-severity results"
-(severity is result metadata); (2) empty list params (`sh:in ()`, `sh:xone ()`) are declared
-constraints with defined semantics, not no-ops.
+**Result against the real W3C SHACL 1.2 core suite: initially 101 / 141 (~72%); now 133 / 141 (~94%)
+after the remediation work below (see "Conformance remediation plan").** Two bugs found and
+fixed by the suite at first run: (1) `sh:conforms` is "no results at all", not "no Violation-severity
+results" (later refined again: `sh:Trace`/`sh:Debug` don't count); (2) empty list params (`sh:in ()`,
+`sh:xone ()`) are declared constraints with defined semantics, not no-ops.
 
-**Remaining 40 failures** are genuine SHACL-1.2 enhancements / deferred features, not core bugs:
+**Initially 40 failures** were genuine SHACL-1.2 enhancements / deferred features, not core bugs:
 path-valued pair constraints (`sh:equals`/`disjoint`/`lessThan` taking a path, not just a predicate),
 datatype/`nodeKind` list values, RDF-1.2 reifier annotations (`{| sh:deactivated true |}`),
 `sh:reifierShape`/`sh:someValue`/`sh:rootClass`/`sh:uniqueValuesFor`/`sh:nodeByExpression`,
@@ -206,7 +207,28 @@ path-valued pair constraints + per-pair `lessThan` results (+6), **M3** `sh:uniq
   `node/in-002`). Treat a shape typed `sh:ShapeClass` (not only `rdfs:Class`) as an implicit class
   target, and ensure subclass instances are picked up via the existing `is_shacl_instance` walk.
 
-### Tier 3 — larger 1.2 features (~12 tests)
+### Tier 3 — larger 1.2 features — ✅ DONE (121 → 131; +class/memberShape → 133)
+**L1** `sh:closed sh:ByTypes` (+2), **L2** `sh:qualifiedValueShapesDisjoint` (+2), **L3**
+`sh:uniqueValuesFor` (+2, single-property), **L4** `sh:someValue`+`sh:rootClass` (+2), **L5**
+`sh:targetWhere`+explicit-`sh:shape` (+2). Plus the deferred `sh:class`-list disjunction (+1) and the
+`sh:memberShape` result-shape fix (+1).
+
+### Final state: 133 / 141 W3C 1.2 core (94%). The remaining 8 are distinct large features:
+- **RDF-1.2 reification (3)** — `misc/deactivated-003` (`{| sh:deactivated true |}` reifier
+  annotation), `property/reifierShape-001/002` (`sh:reifierShape`/`sh:reificationRequired`). Needs
+  parsing RDF-1.2 annotation syntax + triple terms in ingestion.
+- **SHACL-SHACL metashapes (2)** — `node/in-003` (uses an undeclared `shsh:` prefix — won't parse
+  strictly), `validation-reports/conformance-disallows-001`. Validate the *shapes graph* against the
+  `shsh:` metashape vocabulary.
+- **Node expressions (1)** — `node/nodeByExpression-001` (`sh:nodeByExpression`, a SHACL
+  node-expression sub-language).
+- **Tuple uniqueness (1)** — `node/uniqueValuesFor-002` (`sh:uniqueValuesFor` over a *list* of
+  properties = combined-key uniqueness; the single-property form passes).
+- **Buggy test (1)** — `node/in-002` is internally inconsistent (the shape carrying `sh:in ()` is
+  `TestInUnsatisfiableShape`, but the expected `sourceShape` is `TestShape`, which the focus is typed
+  as yet which declares no constraint).
+
+#### Original Tier 3 notes (kept for reference)
 
 - **L1. `sh:closed sh:ByTypes`** — 2 tests (`node/closed-003/004`). New 1.2 closure variant: the
   permitted predicate set is computed per `rdf:type` of the focus (each type's own + inherited
