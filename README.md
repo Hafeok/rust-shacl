@@ -1,69 +1,140 @@
 # shacl-rs
 
-A SHACL 1.2 validation engine in Rust, decoupled from any single triplestore.
+**A native Rust [SHACL 1.2](https://www.w3.org/TR/shacl12-core/) validator.**
 
-Targets **SHACL 1.2 Core** + **SHACL 1.2 SPARQL Extensions** (W3C Working Drafts). The full
-behavioral specification — numbered requirements traced to the W3C spec and the W3C test suite —
-is in [`shacl-rs-functional-spec.md`](./shacl-rs-functional-spec.md). That document is the source
-of truth; this README is just orientation.
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![SHACL 1.2 core](https://img.shields.io/badge/W3C%20SHACL%201.2%20core-138%2F141-brightgreen.svg)](#conformance)
 
-## Why another SHACL library
-
-The engine is generic over a graph **backend trait**, not bound to a specific store. `oxigraph`
-is *a* backend, behind its own crate — the core validation logic compiles without it (enforced in
-CI, `REQ-ARCH-1`). Property paths and recursion are implemented as least-fixpoint closures with a
-property-tested oracle (the "provable core", spec §4.1, §9).
-
-## Workspace layout (spec §11.1)
-
-| Crate | Role | Key spec refs | Depends on `oxigraph`? |
-|-------|------|---------------|------------------------|
-| `shacl-model` | Shape + path AST, RDF 1.2 term re-export | §3, §4, `REQ-ING/TERM` | no |
-| `shacl-core` | Validation engine, generic over `RdfGraph` | §4–§7, `REQ-PATH/TGT/RPT/CMP` | **no** (enforced) |
-| `shacl-sparql` | SHACL-SPARQL, generic over `SparqlGraph` | §8, `REQ-SPQ` | no |
-| `shacl-oxigraph` | Backend adapters + in-memory test graph | §11, ADR-009 | yes |
-| `shacl-testsuite` | W3C 1.2 manifest runner + diff harness | §10.1, `REQ-TS` | yes |
-
-The two seam traits (`shacl-core/src/graph.rs`):
+Validate an RDF graph against a SHACL shapes graph — entirely in Rust, no Python, no `pyshacl`.
+`shacl-rs` implements the full SHACL 1.2 **Core** constraint set plus **SHACL-SPARQL** (`sh:sparql`),
+parses Turtle 1.2 shapes and data, and runs over either an in-memory graph or an
+[`oxigraph`](https://github.com/oxigraph/oxigraph) store.
 
 ```rust
-trait RdfGraph   { fn triples(s?, p?, o?) -> ...; fn reach(start, path) -> NodeSet; }
+use shacl_oxigraph::validate_turtle;
+
+let shapes = r#"
+    @prefix sh: <http://www.w3.org/ns/shacl#> .
+    @prefix ex: <http://example.com/> .
+    @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+    ex:PersonShape a sh:NodeShape ;
+      sh:targetClass ex:Person ;
+      sh:property [ sh:path ex:age ; sh:datatype xsd:integer ;
+                    sh:message "age must be an integer" ] .
+"#;
+let data = r#"
+    @prefix ex: <http://example.com/> .
+    ex:alice a ex:Person ; ex:age "twenty" .
+"#;
+
+let report = validate_turtle(shapes, data)?;
+assert!(!report.conforms());
+for r in &report.results {
+    println!("{:?}: {:?}", r.focus_node, r.messages); // → "age must be an integer"
+}
+# Ok::<(), String>(())
+```
+
+## Why
+
+- **Native & embeddable.** A library, not a CLI shell-out — drop it into a Rust application and
+  validate in-process.
+- **Single source of truth.** Keep your constraints as `.ttl` SHACL shapes and validate them
+  directly; no hand-mirrored checkers to keep in sync.
+- **`sh:message` → `sh:resultMessage`.** Validation reports read as human-readable conformance
+  reports, carrying the message each shape declares.
+- **Core stays SPARQL-free.** `shacl-core` has **no** dependency on `oxigraph` or any SPARQL engine
+  (enforced; `REQ-ARCH-1`); the SPARQL backend is an opt-in layer.
+
+## Conformance
+
+Validated against the [W3C SHACL 1.2 test suite](https://github.com/w3c/data-shapes): **138 / 141 of
+the core suite pass** (~98%). The remaining three are out of scope for a Core validator (SHACL-SHACL
+`shsh:` metashapes, a configurable `sh:conformanceDisallows` policy, and one internally-inconsistent
+fixture). See [`CHANGELOG.md`](CHANGELOG.md) for the feature list and known limitations.
+
+Supported, in brief: all §7 components (value-type, cardinality, range, string, property-pair,
+logical, shape-based, list, `sh:closed`/`sh:hasValue`/`sh:in`/…), all seven property-path kinds, every
+target form, recursion detection, RDF-1.2 reifier annotations, and SHACL-SPARQL §8.1.
+
+## Install
+
+```toml
+[dependencies]
+# released tag (recommended):
+shacl-oxigraph = { git = "https://github.com/Hafeok/rust-shacl", tag = "v0.1.0" }
+# or, for Core-only use without oxigraph:
+# shacl-core = { git = "https://github.com/Hafeok/rust-shacl", tag = "v0.1.0" }
+```
+
+MSRV: **Rust 1.87** (required by `oxigraph` 0.5.x / `oxrdf` 0.3.x).
+
+## Usage
+
+**One call** — parse shapes + data from Turtle and validate (Core §7 *and* SPARQL §8.1):
+
+```rust
+let report = shacl_oxigraph::validate_turtle(shapes_ttl, data_ttl)?;
+```
+
+**Already have an `oxigraph::Store`?** Wrap it and reuse parsed shapes:
+
+```rust
+use shacl_oxigraph::{ingest::parse_shapes, store::OxiStore, validate_store};
+
+let shapes = parse_shapes(shapes_ttl)?;          // parse once, cache
+let store  = OxiStore::new(existing_store);
+let report = validate_store(&store, &shapes);
+```
+
+**Core-only, against your own backend** — implement the `RdfGraph` trait and call the generic engine
+(`shacl_core::validate`), with no oxigraph dependency at all.
+
+Embedding in a host application (mapping the report to your own diagnostic type, what to keep/delete)
+is covered in [`docs/integration.md`](docs/integration.md).
+
+## Workspace layout
+
+| Crate | Role | Depends on `oxigraph`? |
+|---|---|---|
+| `shacl-model` | RDF term model (re-exports `oxrdf`) + the shape / path / target AST | no |
+| `shacl-core` | The Level-1 validation engine over the `RdfGraph` trait | **no** (enforced) |
+| `shacl-sparql` | SHACL-SPARQL (§8): `sh:sparql` over the `SparqlGraph` trait | no |
+| `shacl-oxigraph` | The only crate depending on `oxigraph`: `OxiStore`, Turtle ingestion, high-level API | yes |
+| `shacl-testsuite` | W3C SHACL test-suite runner + offline conformance gate | yes |
+
+The two seam traits live in `shacl-core/src/graph.rs`:
+
+```rust
+trait RdfGraph              { fn triples(s?, p?, o?) -> impl Iterator<Item = Triple>; }
 trait SparqlGraph: RdfGraph { fn select(...); fn ask(...); }
 ```
 
-Every constraint component implements `Validator` (`shacl-core/src/validator.rs`); the spec's §7
-component packets map 1:1 to these impls.
+Every constraint component implements `Validator`; the W3C §7 component packets map 1:1 onto these
+impls. The full numbered specification is in
+[`shacl-rs-functional-spec.md`](shacl-rs-functional-spec.md).
 
-## Build order (spec §11.5)
+## Building & testing
 
-Each step lands with green tests before the next:
+```bash
+cargo build --workspace
+cargo test  --workspace
+cargo clippy --workspace --all-targets
+```
 
-1. `shacl-model` + Turtle 1.2 shapes-graph parsing (`oxttl`).
-2. **`closure` helper + property tests** — the provable fixpoint core. *(implemented)*
-3. `MemGraph` in-memory backend. *(implemented)*
-4. Path evaluation (§4) over `RdfGraph`. *(implemented; inverse-of-closure partial — see TODO)*
-5. Report builders (§6.7).
-6. **`CMP-NODEKIND`** — wires validator dispatch + report end-to-end. *(implemented)*
-7. `CMP-CLASS`, `CMP-DATATYPE` (uses `is_shacl_instance` + `oxsdatatypes`). *(class sketched; datatype lexical TODO)*
-8. Remaining §7 groups: cardinality → range → string → pair → logical → shape → list → other.
-9. `shacl-sparql` (§8): prefixes → constraints → components → pre-binding seam.
-10. Conformance matrix + CI gate on the W3C 1.2 suite.
-
-## Status
-
-Scaffold + provable core. What's real vs. stubbed:
-
-- **Real**: workspace, traits, `closure` (with proptest invariants), path evaluator,
-  `MemGraph`, `NodeKind` validator, `is_shacl_instance`, report/conforms logic.
-- **Stubbed**: shapes-graph ingestion (needs parser wiring), most §7 components, all of §8,
-  the test-suite runner.
-- **Known partial**: inverse of a `*`/`+` path (`REQ-PATH-4`, flagged with `debug_assert!`);
-  `sh:datatype` lexical-space check (`REQ-DATATYPE-2`, TODO via `oxsdatatypes`).
-
-> Not yet compiled in this environment (no toolchain present at scaffold time). Signatures and
-> module structure are consistent with the spec; first `cargo build`/`cargo test` is step 1 of
-> picking this up.
+The library crates are free of `unwrap`/`expect`/`panic!`, so they pass downstream
+`deny(clippy::unwrap_used)` policies.
 
 ## License
 
-MIT OR Apache-2.0.
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this
+work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
+additional terms or conditions.
