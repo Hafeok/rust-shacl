@@ -11,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 rust-version = "1.87"  # MSRV floor: oxigraph 0.5.x / oxrdf 0.3.x require rustc 1.87
 license = "MIT OR Apache-2.0"
