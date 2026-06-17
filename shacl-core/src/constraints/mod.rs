@@ -277,14 +277,18 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             })
             .collect(),
 
-        // §7.9.1 — sh:closed (+ sh:ignoredProperties).
-        "ClosedConstraintComponent" => match param_bool(c, "closed") {
-            Some(true) => {
+        // §7.9.1 — sh:closed (+ sh:ignoredProperties). Value is `true` (closure over the shape's own
+        // properties) or, in 1.2, `sh:ByTypes` (closure over the focus node's types' shapes).
+        "ClosedConstraintComponent" => {
+            let by_types = matches!(param_term(c, "closed"),
+                Some(Term::NamedNode(n)) if n.as_str() == format!("{SH}ByTypes"));
+            if by_types || param_bool(c, "closed") == Some(true) {
                 let ignored = param_iris(c, "ignoredProperties");
-                vec![Box::new(other::ClosedValidator { ignored }) as Box<dyn Validator<G>>]
+                vec![Box::new(other::ClosedValidator { ignored, by_types }) as Box<dyn Validator<G>>]
+            } else {
+                Vec::new()
             }
-            _ => Vec::new(),
-        },
+        }
 
         _ => Vec::new(),
     }

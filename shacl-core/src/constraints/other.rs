@@ -21,40 +21,138 @@ const SH: &str = "http://www.w3.org/ns/shacl#";
 pub struct ClosedValidator {
     /// Predicates exempted from closure (`sh:ignoredProperties`).
     pub ignored: Vec<NamedNode>,
+    /// `sh:ByTypes` mode (1.2): the permitted predicates are those declared by the shapes of the
+    /// focus node's `rdf:type`s (and their superclasses), rather than the focus shape's own.
+    pub by_types: bool,
 }
 
 impl ClosedValidator {
-    /// The predicates permitted by closure: the predicate-path IRI of every `sh:property` shape
-    /// referenced by the focus shape, plus the ignored predicates.
+    /// The predicates permitted by closure, plus the ignored predicates. In the default mode these
+    /// are the predicate paths declared by the focus shape's own `sh:property` shapes; in `sh:ByTypes`
+    /// mode they are gathered from the shapes named by the focus node's types and their superclasses.
     fn allowed<G: RdfGraph>(&self, ctx: &Ctx<'_, G>) -> HashSet<String> {
         let mut set: HashSet<String> = self
             .ignored
             .iter()
             .map(|n| n.as_str().to_string())
             .collect();
-        for c in ctx.shape.constraints() {
-            let local = c
-                .component
-                .as_str()
-                .strip_prefix(SH)
-                .unwrap_or(c.component.as_str());
-            if local != "PropertyConstraintComponent" {
+        if self.by_types {
+            // rdf:type is implicitly permitted under sh:ByTypes — it is how the focus declares the
+            // types that drive the closure (W3C core/node/closed-003).
+            set.insert("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".to_string());
+            let classes: HashSet<String> = focus_type_closure(ctx)
+                .iter()
+                .map(|c| c.as_str().to_string())
+                .collect();
+            // Every shape associated with one of the focus's types — by identity (an implicit class
+            // shape) or via `sh:targetClass` — contributes its (and its `sh:node`-referenced shapes')
+            // property predicates.
+            let mut visited: HashSet<String> = HashSet::new();
+            for shape in ctx.registry.values() {
+                if shape_targets_class(shape, &classes) {
+                    gather_shape_predicates(shape, ctx.registry, &mut set, &mut visited);
+                }
+            }
+        } else {
+            collect_property_predicates(ctx.shape, ctx.registry, &mut set);
+        }
+        set
+    }
+}
+
+/// Is `shape` associated with one of `classes`: identified by it (implicit class shape) or declaring
+/// a `sh:targetClass`/implicit-class target for it?
+fn shape_targets_class(shape: &Shape, classes: &HashSet<String>) -> bool {
+    use shacl_model::shape::ShapeId;
+    use shacl_model::target::Target;
+    if let ShapeId::Named(n) = shape.id() {
+        if classes.contains(n.as_str()) {
+            return true;
+        }
+    }
+    shape.targets().iter().any(|t| match t {
+        Target::Class(c) | Target::ImplicitClass(c) => classes.contains(c.as_str()),
+        _ => false,
+    })
+}
+
+/// Gather the property predicates of `shape` and, transitively, of every shape it references via
+/// `sh:node` (the §7.9.1 `sh:ByTypes` closure follows shape composition). `visited` guards cycles.
+fn gather_shape_predicates(
+    shape: &Shape,
+    registry: &crate::engine::Registry<'_>,
+    set: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+) {
+    let key = format!("{:?}", shape.id());
+    if !visited.insert(key) {
+        return;
+    }
+    collect_property_predicates(shape, registry, set);
+    for c in shape.constraints() {
+        if c.component.as_str() != format!("{SH}NodeConstraintComponent") {
+            continue;
+        }
+        for (pred, val) in &c.params {
+            if pred.as_str() != format!("{SH}node") {
                 continue;
             }
-            for (pred, val) in &c.params {
-                if pred.as_str() != format!("{SH}property") {
-                    continue;
+            if let Some(id) = term_to_shape_id(val) {
+                if let Some(referenced) = lookup(registry, &id) {
+                    gather_shape_predicates(referenced, registry, set, visited);
                 }
-                if let Some(id) = term_to_shape_id(val) {
-                    if let Some(Shape::Property(p)) = lookup(ctx.registry, &id) {
-                        if let Path::Predicate(iri) = &p.path {
-                            set.insert(iri.as_str().to_string());
-                        }
+            }
+        }
+    }
+}
+
+/// The focus node's types and all their transitive `rdfs:subClassOf` superclasses (as IRIs).
+fn focus_type_closure<G: RdfGraph>(ctx: &Ctx<'_, G>) -> Vec<NamedNode> {
+    let type_pred = NamedNode::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
+    let sub_pred = NamedNode::new_unchecked("http://www.w3.org/2000/01/rdf-schema#subClassOf");
+    let mut out = Vec::new();
+    let mut seen: HashSet<String> = HashSet::new();
+    for t in ctx.graph.objects(ctx.focus, &type_pred) {
+        let supers = crate::closure::reachable_star(t, |c: &Term| {
+            ctx.graph
+                .triples(Some(c), Some(&sub_pred), None)
+                .map(|tr| tr.object)
+                .collect::<Vec<_>>()
+        });
+        for s in supers {
+            if let Term::NamedNode(n) = s {
+                if seen.insert(n.as_str().to_string()) {
+                    out.push(n);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Insert the predicate-path IRIs of every `sh:property` shape referenced by `shape`.
+fn collect_property_predicates(
+    shape: &Shape,
+    registry: &crate::engine::Registry<'_>,
+    set: &mut HashSet<String>,
+) {
+    for c in shape.constraints() {
+        let local = c.component.as_str().strip_prefix(SH).unwrap_or("");
+        if local != "PropertyConstraintComponent" {
+            continue;
+        }
+        for (pred, val) in &c.params {
+            if pred.as_str() != format!("{SH}property") {
+                continue;
+            }
+            if let Some(id) = term_to_shape_id(val) {
+                if let Some(Shape::Property(p)) = lookup(registry, &id) {
+                    if let Path::Predicate(iri) = &p.path {
+                        set.insert(iri.as_str().to_string());
                     }
                 }
             }
         }
-        set
     }
 }
 
