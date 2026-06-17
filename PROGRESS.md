@@ -213,20 +213,23 @@ path-valued pair constraints + per-pair `lessThan` results (+6), **M3** `sh:uniq
 `sh:targetWhere`+explicit-`sh:shape` (+2). Plus the deferred `sh:class`-list disjunction (+1) and the
 `sh:memberShape` result-shape fix (+1).
 
-### Final state: 133 / 141 W3C 1.2 core (94%). The remaining 8 are distinct large features:
-- **RDF-1.2 reification (3)** — `misc/deactivated-003` (`{| sh:deactivated true |}` reifier
-  annotation), `property/reifierShape-001/002` (`sh:reifierShape`/`sh:reificationRequired`). Needs
-  parsing RDF-1.2 annotation syntax + triple terms in ingestion.
-- **SHACL-SHACL metashapes (2)** — `node/in-003` (uses an undeclared `shsh:` prefix — won't parse
-  strictly), `validation-reports/conformance-disallows-001`. Validate the *shapes graph* against the
-  `shsh:` metashape vocabulary.
-- **Node expressions (1)** — `node/nodeByExpression-001` (`sh:nodeByExpression`, a SHACL
-  node-expression sub-language).
-- **Tuple uniqueness (1)** — `node/uniqueValuesFor-002` (`sh:uniqueValuesFor` over a *list* of
-  properties = combined-key uniqueness; the single-property form passes).
-- **Buggy test (1)** — `node/in-002` is internally inconsistent (the shape carrying `sh:in ()` is
+### Tier 4 — RDF-1.2 reification, node expressions, tuple uniqueness — ✅ DONE (133 → 138)
+- **RDF-1.2 reifier annotations (3)** — `misc/deactivated-003` (per-constraint `{| sh:deactivated
+  true |}`, parsed via `oxttl`'s `rdf:reifies` + triple terms), `property/reifierShape-001/002`
+  (`sh:reifierShape` validates the reifier node of each path triple; `sh:reificationRequired`).
+- **Node expressions (1)** — `node/nodeByExpression-001` (IRI node expression = `sh:node` semantics).
+- **Tuple uniqueness (1)** — `node/uniqueValuesFor-002` (cartesian-product tuple key over a property
+  list).
+
+### Final state: 138 / 141 W3C 1.2 core (~98%). The remaining 3 are not standard Core validation:
+- **`node/in-002`** — internally inconsistent test: the shape carrying `sh:in ()` is
   `TestInUnsatisfiableShape`, but the expected `sourceShape` is `TestShape`, which the focus is typed
-  as yet which declares no constraint).
+  as yet which declares no constraint. Untestable by a correct implementation.
+- **`node/in-003`** — malformed Turtle (uses an undeclared `shsh:` prefix → parse error); a
+  SHACL-SHACL metashape test that validates the *shapes graph* against the `shsh:` vocabulary.
+- **`validation-reports/conformance-disallows-001`** — requires `sh:conformanceDisallows sh:Violation`,
+  a configurable conformance *policy* (only Violation breaks conformance) supplied out-of-band; our
+  default policy counts Info/Warning/Violation. Not a standard validation input.
 
 #### Original Tier 3 notes (kept for reference)
 
