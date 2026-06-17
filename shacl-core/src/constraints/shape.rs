@@ -182,6 +182,36 @@ impl<G: RdfGraph> Validator<G> for PropertyValidator {
     }
 }
 
+// ── sh:nodeByExpression (§7.8, new in 1.2) ──────────────────────────────────────────────────────
+
+/// `sh:NodeByExpressionConstraintComponent`. With an **IRI node expression** (a shape reference —
+/// the only form SHACL Core uses), this is `sh:node` semantics: each value node must conform to the
+/// referenced shape, else one summarising result. General node expressions (path/function) are not
+/// modelled.
+pub struct NodeByExpressionValidator {
+    /// The referenced shape (the IRI node expression).
+    pub shape: ShapeId,
+}
+
+impl<G: RdfGraph> Validator<G> for NodeByExpressionValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked(
+            "http://www.w3.org/ns/shacl#NodeByExpressionConstraintComponent",
+        )
+    }
+    fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        for v in value_nodes {
+            if !value_conforms(ctx, &self.shape, v) {
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("NodeByExpressionConstraintComponent"),
+                ));
+            }
+        }
+    }
+}
+
 // ── sh:someValue (§7.8.3, new in 1.2) ───────────────────────────────────────────────────────────
 
 /// `sh:SomeValueConstraintComponent`. **At least one** value node must conform to the referenced

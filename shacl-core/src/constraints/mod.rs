@@ -281,6 +281,13 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .map(|shape| Box::new(shape::SomeValueValidator { shape }) as Box<dyn Validator<G>>)
             .into_iter()
             .collect(),
+        // §7.8 — sh:nodeByExpression (IRI node expression = sh:node semantics).
+        "NodeByExpressionConstraintComponent" => param_shape(c, "nodeByExpression")
+            .map(|shape| {
+                Box::new(shape::NodeByExpressionValidator { shape }) as Box<dyn Validator<G>>
+            })
+            .into_iter()
+            .collect(),
         // §7.9.4 — sh:rootClass (value nodes are subclasses-or-self of the root). May repeat.
         "RootClassConstraintComponent" => param_iris(c, "rootClass")
             .into_iter()

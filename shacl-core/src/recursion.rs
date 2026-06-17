@@ -25,6 +25,7 @@ const SHAPE_PARAMS: &[&str] = &[
     "memberShape",
     "someValue",
     "reifierShape",
+    "nodeByExpression",
 ];
 
 /// The shape ids referenced by `shape` through any shape-valued parameter.

@@ -75,6 +75,11 @@ const COMPONENTS: &[(&str, &str, &[&str])] = &[
         &["reificationRequired"],
     ),
     ("someValue", "SomeValueConstraintComponent", &[]),
+    (
+        "nodeByExpression",
+        "NodeByExpressionConstraintComponent",
+        &[],
+    ),
     ("rootClass", "RootClassConstraintComponent", &[]),
     ("uniqueValuesFor", "UniqueValuesForConstraintComponent", &[]),
     (
