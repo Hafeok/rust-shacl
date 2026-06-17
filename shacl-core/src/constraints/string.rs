@@ -215,16 +215,31 @@ impl<G: RdfGraph> Validator<G> for UniqueLangValidator {
         use std::collections::BTreeMap;
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         for v in value_nodes {
-            if let Some(tag) = language_of(v) {
-                if !tag.is_empty() {
-                    *counts.entry(tag.to_ascii_lowercase()).or_default() += 1;
-                }
+            if let Some(key) = lang_dir_key(v) {
+                *counts.entry(key).or_default() += 1;
             }
         }
-        for (_tag, n) in counts {
+        for (_key, n) in counts {
             if n > 1 {
                 out.push(result_for(ctx, None, comp("UniqueLangConstraintComponent")));
             }
         }
+    }
+}
+
+/// Uniqueness key for `sh:uniqueLang`: the (lower-cased) language tag **and** the RDF-1.2 base
+/// direction. Two values share a tag only if both language and direction match, so `"x"@ar--ltr` and
+/// `"x"@ar--rtl` are distinct (W3C `core/property/uniqueLang-003`). Non-language literals key to
+/// `None`.
+fn lang_dir_key(t: &Term) -> Option<String> {
+    match t {
+        Term::Literal(l) => {
+            let lang = l.language()?;
+            if lang.is_empty() {
+                return None;
+            }
+            Some(format!("{}|{:?}", lang.to_ascii_lowercase(), l.direction()))
+        }
+        _ => None,
     }
 }

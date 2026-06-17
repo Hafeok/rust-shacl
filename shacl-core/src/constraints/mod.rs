@@ -365,13 +365,15 @@ fn param_terms(c: &Constraint, local: &str) -> Vec<Term> {
         .collect()
 }
 
-/// The first boolean value bound to parameter `sh:<local>` (e.g. `sh:uniqueLang`, `sh:singleLine`),
-/// read from an `xsd:boolean` literal (`"true"`/`"false"`, or `"1"`/`"0"`).
+/// The first boolean value bound to parameter `sh:<local>` (e.g. `sh:uniqueLang`, `sh:singleLine`).
+/// Only the canonical lexical forms `"true"`/`"false"` count: SHACL activation flags compare the
+/// literal, so `"1"^^xsd:boolean` does **not** activate the constraint (W3C
+/// `core/property/uniqueLang-002`).
 fn param_bool(c: &Constraint, local: &str) -> Option<bool> {
     match param_term(c, local) {
         Some(Term::Literal(lit)) => match lit.value() {
-            "true" | "1" => Some(true),
-            "false" | "0" => Some(false),
+            "true" => Some(true),
+            "false" => Some(false),
             _ => None,
         },
         _ => None,
