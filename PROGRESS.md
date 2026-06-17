@@ -131,15 +131,25 @@ well-formedness checks.
 - ⬜ Recursion / cycle detection (Tarjan SCC, §9.1, ADR-002) before logical/shape components.
 - ⬜ `sh:message` → `sh:resultMessage` copying (REQ-ING-9); results currently carry empty messages.
 
+## Host-application surface (for embedding, e.g. product-cli) — ✅ DONE
+- ✅ `sh:message` → `sh:resultMessage` (REQ-ING-9): shapes carry a `messages` field; results copy the
+  owning shape's messages.
+- ✅ `sh:sparql`/`sh:SPARQLConstraint` (§8.1) wired into a high-level pass.
+- ✅ `shacl_oxigraph::validate_turtle(shapes_ttl, data_ttl)` and `validate_store(&OxiStore, &shapes)`
+  run Core (§7) + SPARQL (§8.1) over one `OxiStore` and merge into one report. `OxiStore::new(store)`
+  wraps a host's existing `oxigraph::Store`.
+- ✅ Library code is unwrap/expect/panic-free (passes `deny(clippy::unwrap_used)`).
+- Proven against `product-cli`'s real `schema/shapes/*.ttl` (vendored as test fixtures): framework
+  messages flow into results and the §5/§4.1 trace-truth `sh:sparql` rule fires. See
+  `docs/integration.md`.
+
 ## Known gaps logged during implementation
 - Derived integer datatypes (xsd:byte/int/short/unsigned*) are lexically validated as xsd:integer;
   numeric range bounds are enforced separately by `sh:minInclusive`/etc. (range comparator, 8b).
-- SHACL-1.2 enhancements not yet implemented (see Phase 12 failures): path-valued property-pair
-  constraints; list-valued `sh:datatype`/`sh:nodeKind`; RDF-1.2 reifier annotations on constraints;
-  `sh:reifierShape`/`sh:reificationRequired`/`sh:someValue`/`sh:rootClass`/`sh:uniqueValuesFor`/
-  `sh:nodeByExpression`; `sh:targetWhere`/explicit-`sh:shape` targets; `sh:message` →
-  `sh:resultMessage` copying; complex-path `sh:resultPath` RDF serialization; `shsh:` shapes-graph
-  well-formedness; SPARQL-based constraint *components* (§8.2) and pre-binding restriction checks.
+- Remaining gaps (none block product-cli's current shapes): complex-path `sh:resultPath` RDF
+  serialization; `shsh:` shapes-graph well-formedness; SPARQL-based constraint *components* (§8.2);
+  pre-binding restriction checks (REQ-SPQ-15); `sh:prefixes` collection (REQ-SPQ-13 — their
+  `sh:select` uses full IRIs, so unaffected); the 3 unreachable W3C tests (see "Final state").
 
 ## Notes / decisions taken during implementation
 - `NodeSet = IndexSet<Term>` (not `BTreeSet`) because oxrdf `Term: !Ord`. Determinism comes from
