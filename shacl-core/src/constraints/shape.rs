@@ -182,6 +182,29 @@ impl<G: RdfGraph> Validator<G> for PropertyValidator {
     }
 }
 
+// ── sh:someValue (§7.8.3, new in 1.2) ───────────────────────────────────────────────────────────
+
+/// `sh:SomeValueConstraintComponent`. **At least one** value node must conform to the referenced
+/// shape; otherwise a single result (no `sh:value` — the violation is the absence of a conformer).
+pub struct SomeValueValidator {
+    /// The referenced shape.
+    pub shape: ShapeId,
+}
+
+impl<G: RdfGraph> Validator<G> for SomeValueValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#SomeValueConstraintComponent")
+    }
+    fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        if !value_nodes
+            .iter()
+            .any(|v| value_conforms(ctx, &self.shape, v))
+        {
+            out.push(result_for(ctx, None, comp("SomeValueConstraintComponent")));
+        }
+    }
+}
+
 // ── sh:qualifiedValueShape (§7.8.4) ─────────────────────────────────────────────────────────────
 
 /// `sh:QualifiedMinCountConstraintComponent` / `sh:QualifiedMaxCountConstraintComponent`. The number

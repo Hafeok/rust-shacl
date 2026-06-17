@@ -45,3 +45,23 @@ pub fn is_shacl_instance<G: RdfGraph + ?Sized>(graph: &G, node: &Term, class: &N
     }
     false
 }
+
+/// Is `class` equal to `root`, or a transitive `rdfs:subClassOf` of it? (`sh:rootClass`, §7.9.4.)
+/// The upward `subClassOf*` walk is the property-tested closure, so it terminates on cyclic subclass
+/// graphs.
+#[must_use]
+pub fn is_subclass_or_self<G: RdfGraph + ?Sized>(
+    graph: &G,
+    class: &NamedNode,
+    root: &NamedNode,
+) -> bool {
+    let sub_pred = rdfs_subclassof();
+    let root_term = Term::NamedNode(root.clone());
+    let supers = reachable_star(Term::NamedNode(class.clone()), |c: &Term| {
+        graph
+            .triples(Some(c), Some(&sub_pred), None)
+            .map(|tr| tr.object)
+            .collect::<Vec<_>>()
+    });
+    supers.contains(&root_term)
+}

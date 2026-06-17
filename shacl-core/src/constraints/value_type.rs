@@ -71,6 +71,37 @@ impl<G: RdfGraph> Validator<G> for ClassValidator {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CMP-ROOTCLASS — sh:rootClass (§7.9.4, new in 1.2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `sh:RootClassConstraintComponent`. Each value node must be a class that is the root class or a
+/// transitive `rdfs:subClassOf` of it; a value that is not (or is not an IRI class) violates.
+pub struct RootClassValidator {
+    /// The required root class.
+    pub root: NamedNode,
+}
+
+impl<G: RdfGraph> Validator<G> for RootClassValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#RootClassConstraintComponent")
+    }
+
+    fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        for v in value_nodes {
+            let ok = matches!(v, Term::NamedNode(c)
+                if crate::constraints::helpers::is_subclass_or_self(ctx.graph, c, &self.root));
+            if !ok {
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("RootClassConstraintComponent"),
+                ));
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CMP-DATATYPE — sh:datatype (§7.1.2). FULLY IMPLEMENTED (ADR-010).
 // ─────────────────────────────────────────────────────────────────────────────
 

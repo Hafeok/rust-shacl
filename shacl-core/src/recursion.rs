@@ -23,6 +23,7 @@ const SHAPE_PARAMS: &[&str] = &[
     "xone",
     "qualifiedValueShape",
     "memberShape",
+    "someValue",
 ];
 
 /// The shape ids referenced by `shape` through any shape-valued parameter.

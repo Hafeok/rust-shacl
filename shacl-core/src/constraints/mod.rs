@@ -259,6 +259,17 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .into_iter()
             .collect(),
 
+        // §7.8.3 — sh:someValue (at least one value conforms to the referenced shape).
+        "SomeValueConstraintComponent" => param_shape(c, "someValue")
+            .map(|shape| Box::new(shape::SomeValueValidator { shape }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+        // §7.9.4 — sh:rootClass (value nodes are subclasses-or-self of the root). May repeat.
+        "RootClassConstraintComponent" => param_iris(c, "rootClass")
+            .into_iter()
+            .map(|root| Box::new(value_type::RootClassValidator { root }) as Box<dyn Validator<G>>)
+            .collect(),
+
         // §7.9.1 — sh:closed (+ sh:ignoredProperties).
         "ClosedConstraintComponent" => match param_bool(c, "closed") {
             Some(true) => {
