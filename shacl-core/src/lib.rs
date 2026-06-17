@@ -12,13 +12,18 @@ pub mod constraints;
 pub mod engine;
 pub mod graph;
 pub mod path;
+pub mod recursion;
 pub mod report;
 pub mod validator;
 pub mod values;
 
-pub use engine::{focus_nodes, validate, validate_focus};
+pub use engine::{
+    build_registry, conforms, focus_nodes, validate, validate_focus, validate_focus_collect,
+    Registry,
+};
 pub use graph::{Bindings, EngineError, NodeSet, PathReach, RdfGraph, Solutions, SparqlGraph};
 pub use path::reach;
+pub use recursion::shape_ref_cycle;
 pub use report::{ValidationReport, ValidationResult};
 pub use validator::{Ctx, Validator};
 pub use values::value_nodes;

@@ -9,17 +9,18 @@ pub mod cardinality; // §7.2 — CMP-MINCOUNT (worked in spec), CMP-MAXCOUNT
 pub mod helpers;
 pub mod list; // §7.5 — CMP-LISTLEN-*, CMP-UNIQUEMEMBERS (sh:memberShape waits for the 9b guard)
 pub mod membership; // §7.9 — CMP-HASVALUE, CMP-IN
+pub mod other; // §7.9 — CMP-CLOSED (rootClass/uniqueValuesFor are documented gaps)
 pub mod pair; // §7.6 — CMP-PAIR-*, CMP-SUBSETOF
 pub mod range; // §7.3 — CMP-RANGE-*
+pub mod shape; // §7.7/7.8 + §7.5.1 — logical, sh:node/property/qualified, sh:memberShape
 pub mod string; // §7.4 — CMP-LENGTH-*, CMP-PATTERN, CMP-SINGLELINE, CMP-LANGUAGEIN, CMP-UNIQUELANG
 pub mod value_type; // §7.1 — CMP-NODEKIND, CMP-CLASS, CMP-DATATYPE
-                    // pub mod logical; // §7.7 — needs recursion guard (ADR-002) before enabling
-                    // pub mod shape;   // §7.8 — needs recursion guard + shape registry
 
+use crate::engine::term_to_shape_id;
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
 use crate::validator::{Ctx, Validator};
-use shacl_model::shape::Constraint;
+use shacl_model::shape::{Constraint, ShapeId};
 use shacl_model::term::{NamedNode, NodeKind, Term};
 
 /// SHACL namespace.
@@ -228,6 +229,81 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             _ => Vec::new(),
         },
 
+        // §7.7 — logical (operands are shape references).
+        "NotConstraintComponent" => param_shape(c, "not")
+            .map(|shape| Box::new(shape::NotValidator { shape }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+        "AndConstraintComponent" => shape_list(c, "and", |shapes| shape::AndValidator { shapes }),
+        "OrConstraintComponent" => shape_list(c, "or", |shapes| shape::OrValidator { shapes }),
+        "XoneConstraintComponent" => {
+            shape_list(c, "xone", |shapes| shape::XoneValidator { shapes })
+        }
+
+        // §7.8 — shape (sh:node summarises; sh:property bubbles). May repeat → one validator each.
+        "NodeConstraintComponent" => param_shapes(c, "node")
+            .into_iter()
+            .map(|shape| Box::new(shape::NodeValidator { shape }) as Box<dyn Validator<G>>)
+            .collect(),
+        "PropertyConstraintComponent" => param_shapes(c, "property")
+            .into_iter()
+            .map(|shape| Box::new(shape::PropertyValidator { shape }) as Box<dyn Validator<G>>)
+            .collect(),
+        "QualifiedMinCountConstraintComponent" => qualified(c, true),
+        "QualifiedMaxCountConstraintComponent" => qualified(c, false),
+
+        // §7.5.1 — sh:memberShape (recurses into a shape; lives with the shape components).
+        "MemberShapeConstraintComponent" => param_shape(c, "memberShape")
+            .map(|shape| Box::new(shape::MemberShapeValidator { shape }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+
+        // §7.9.1 — sh:closed (+ sh:ignoredProperties).
+        "ClosedConstraintComponent" => match param_bool(c, "closed") {
+            Some(true) => {
+                let ignored = param_iris(c, "ignoredProperties");
+                vec![Box::new(other::ClosedValidator { ignored }) as Box<dyn Validator<G>>]
+            }
+            _ => Vec::new(),
+        },
+
+        _ => Vec::new(),
+    }
+}
+
+/// Build a logical validator over the shape list bound to `sh:<local>` (`sh:and`/`sh:or`/`sh:xone`),
+/// or none when the list is empty/ill-formed.
+fn shape_list<G: RdfGraph, V: Validator<G> + 'static>(
+    c: &Constraint,
+    local: &str,
+    make: impl FnOnce(Vec<ShapeId>) -> V,
+) -> Vec<Box<dyn Validator<G>>> {
+    let shapes = param_shapes(c, local);
+    if shapes.is_empty() {
+        Vec::new()
+    } else {
+        vec![Box::new(make(shapes)) as Box<dyn Validator<G>>]
+    }
+}
+
+/// Build a `sh:qualifiedValueShape` count validator (`is_min` selects min vs max count).
+fn qualified<G: RdfGraph>(c: &Constraint, is_min: bool) -> Vec<Box<dyn Validator<G>>> {
+    let count_param = if is_min {
+        "qualifiedMinCount"
+    } else {
+        "qualifiedMaxCount"
+    };
+    match (
+        param_shape(c, "qualifiedValueShape"),
+        param_int(c, count_param),
+    ) {
+        (Some(shape), Some(bound)) => {
+            vec![Box::new(shape::QualifiedValidator {
+                shape,
+                bound,
+                is_min,
+            }) as Box<dyn Validator<G>>]
+        }
         _ => Vec::new(),
     }
 }
@@ -303,4 +379,18 @@ fn param_bool(c: &Constraint, local: &str) -> Option<bool> {
         },
         _ => None,
     }
+}
+
+/// The first shape reference bound to parameter `sh:<local>` (e.g. `sh:not`, `sh:qualifiedValueShape`).
+fn param_shape(c: &Constraint, local: &str) -> Option<ShapeId> {
+    param_term(c, local).as_ref().and_then(term_to_shape_id)
+}
+
+/// All shape references bound to parameter `sh:<local>`, in order. Used for repeated single-valued
+/// references (`sh:node`/`sh:property`) and for flattened shape lists (`sh:and`/`sh:or`/`sh:xone`).
+fn param_shapes(c: &Constraint, local: &str) -> Vec<ShapeId> {
+    param_terms(c, local)
+        .iter()
+        .filter_map(term_to_shape_id)
+        .collect()
 }

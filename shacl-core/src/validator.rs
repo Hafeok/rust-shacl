@@ -1,6 +1,7 @@
 //! The validator seam (§11.3). Every §7 constraint component implements [`Validator`]; the engine
 //! computes value nodes (§5) then dispatches each declared constraint to its validator.
 
+use crate::engine::Registry;
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
 use shacl_model::shape::{Constraint, Severity, Shape};
@@ -20,6 +21,11 @@ pub struct Ctx<'a, G: RdfGraph> {
     pub severity: Severity,
     /// The property path, if the shape is a property shape (for `sh:resultPath`, §6.7.2.2).
     pub path_sparql: Option<String>,
+    /// Shape registry for resolving referenced shapes (`sh:node`/`sh:property`/logical/§7.5/7.8).
+    pub registry: &'a Registry<'a>,
+    /// Conformance-recursion depth (backstop against runaway recursion; the real guard is the
+    /// shapes-graph SCC check, ADR-002 / [`crate::recursion`]).
+    pub depth: usize,
 }
 
 /// A constraint-component validator. One impl per `sh:…ConstraintComponent`.

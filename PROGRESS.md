@@ -64,10 +64,17 @@ recursion-bearing ones gated behind the SCC guard (9b).
   (REQ-RPT-2/3): report + result blank nodes, `sh:conforms`, all §6.7.2 result fields.
   `sh:resultPath` emitted for predicate paths; compound paths skipped (documented gap, need RDF
   blank-node path structure). 3 unit tests in `report.rs`.
-- **9b. Recursion / cycle guard** (ADR-002, §9.1) — Tarjan SCC over the shape-ref graph. **Hard gate**
-  before 8d's `sh:memberShape` and all of 9c.
-- **9c. Shape-logic + shape-ref (§7.7–7.8)** — `sh:not/and/or/xone`, `sh:node/property/someValue/
-  qualifiedValueShape`. Needs a shape registry + conformance-checking entry point. After 9b.
+- **9b. Recursion / cycle guard** (ADR-002, §9.1) — ✅ `recursion::shape_ref_cycle` (white/grey/black
+  DFS over the shape-ref graph; self-ref = cycle; dangling refs ignored). 4 unit tests. Runtime also
+  has a `MAX_DEPTH` backstop in the engine.
+- **9c. Shape-logic + shape-ref (§7.7–7.8)** — ✅ Added a shape `Registry` (`ShapeId → &Shape`) on
+  `Ctx`, recursive `conforms`/`validate_focus_collect` in the engine, and the components:
+  `sh:not/and/or/xone` (§7.7), `sh:node` (summarises) / `sh:property` (bubbles) /
+  `sh:qualifiedValueShape` min+max (§7.8), `sh:memberShape` (§7.5.1), and `sh:closed` +
+  `sh:ignoredProperties` (§7.9.1, 8e). 8 tests in `shacl-oxigraph/tests/shape_logic.rs`.
+  Deferred: `sh:someValue`, `sh:reifierShape`/`sh:reificationRequired`,
+  `sh:qualifiedValueShapesDisjoint`, `sh:rootClass`, `sh:uniqueValuesFor` (under-specified / RDF-1.2
+  reification — see known gaps).
 
 ### Phase 10 — ingestion (unblocks real fixtures)
 Turtle → `Shape` (`oxttl` rdf-12, REQ-ING-*); ill-formedness detection (REQ-ING-3/4/5);
