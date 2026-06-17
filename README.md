@@ -2,6 +2,7 @@
 
 **A native Rust [SHACL 1.2](https://www.w3.org/TR/shacl12-core/) validator.**
 
+[![CI](https://github.com/Hafeok/rust-shacl/actions/workflows/ci.yml/badge.svg)](https://github.com/Hafeok/rust-shacl/actions/workflows/ci.yml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 [![SHACL 1.2 core](https://img.shields.io/badge/W3C%20SHACL%201.2%20core-138%2F141-brightgreen.svg)](#conformance)
 
