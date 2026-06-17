@@ -306,6 +306,84 @@ fn sibling_qualified_shapes<G: RdfGraph>(ctx: &Ctx<'_, G>, me: &ShapeId) -> Vec<
     out
 }
 
+// ── sh:reifierShape (§7.8.5, RDF-1.2 reification) ───────────────────────────────────────────────
+
+/// `sh:ReifierShapeConstraintComponent`. For each value node, the **reifier** of the triple
+/// `(focus, path-predicate, value)` must conform to the referenced shape. With
+/// `sh:reificationRequired` set, a value triple that has *no* reifier also violates. One result per
+/// offending value node (`sh:value` = the value node).
+pub struct ReifierShapeValidator {
+    /// The shape each reifier must conform to.
+    pub shape: ShapeId,
+    /// `sh:reificationRequired` — a value triple must have at least one reifier.
+    pub required: bool,
+}
+
+impl<G: RdfGraph> Validator<G> for ReifierShapeValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#ReifierShapeConstraintComponent")
+    }
+    fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        // Only predicate-path property shapes have a reifiable triple.
+        let Some(pred) = predicate_path_of(ctx.shape) else {
+            return;
+        };
+        let reifies = shacl_model::term::NamedNode::new_unchecked(
+            "http://www.w3.org/1999/02/22-rdf-syntax-ns#reifies",
+        );
+        for v in value_nodes {
+            let reifiers: Vec<Term> = ctx
+                .graph
+                .triples(None, Some(&reifies), None)
+                .filter(|t| reifies_triple(&t.object, ctx.focus, &pred, v))
+                .map(|t| t.subject)
+                .collect();
+            let violates = if reifiers.is_empty() {
+                self.required
+            } else {
+                !reifiers.iter().all(|r| value_conforms(ctx, &self.shape, r))
+            };
+            if violates {
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("ReifierShapeConstraintComponent"),
+                ));
+            }
+        }
+    }
+}
+
+/// The predicate IRI of a property shape with a simple predicate path (else `None`).
+fn predicate_path_of(shape: &shacl_model::shape::Shape) -> Option<shacl_model::term::NamedNode> {
+    use shacl_model::path::Path;
+    use shacl_model::shape::Shape;
+    match shape {
+        Shape::Property(p) => match &p.path {
+            Path::Predicate(iri) => Some(iri.clone()),
+            _ => None,
+        },
+        Shape::Node(_) => None,
+    }
+}
+
+/// Does the triple term `obj` reify `(subject, predicate, object)`?
+fn reifies_triple(
+    obj: &Term,
+    subject: &Term,
+    predicate: &shacl_model::term::NamedNode,
+    object: &Term,
+) -> bool {
+    match obj {
+        Term::Triple(inner) => {
+            inner.subject.to_string() == subject.to_string()
+                && &inner.predicate == predicate
+                && &inner.object == object
+        }
+        _ => false,
+    }
+}
+
 // ── sh:memberShape (§7.5.1) ─────────────────────────────────────────────────────────────────────
 
 /// `sh:MemberShapeConstraintComponent`. Each value node must be a well-formed `rdf:List` all of whose

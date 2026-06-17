@@ -267,6 +267,14 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .map(|shape| Box::new(shape::MemberShapeValidator { shape }) as Box<dyn Validator<G>>)
             .into_iter()
             .collect(),
+        // §7.8.5 — sh:reifierShape (+ sh:reificationRequired), RDF-1.2 reification.
+        "ReifierShapeConstraintComponent" => param_shape(c, "reifierShape")
+            .map(|shape| {
+                let required = param_bool(c, "reificationRequired") == Some(true);
+                Box::new(shape::ReifierShapeValidator { shape, required }) as Box<dyn Validator<G>>
+            })
+            .into_iter()
+            .collect(),
 
         // §7.8.3 — sh:someValue (at least one value conforms to the referenced shape).
         "SomeValueConstraintComponent" => param_shape(c, "someValue")

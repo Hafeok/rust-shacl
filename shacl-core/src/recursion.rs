@@ -24,6 +24,7 @@ const SHAPE_PARAMS: &[&str] = &[
     "qualifiedValueShape",
     "memberShape",
     "someValue",
+    "reifierShape",
 ];
 
 /// The shape ids referenced by `shape` through any shape-valued parameter.

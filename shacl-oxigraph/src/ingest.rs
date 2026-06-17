@@ -69,6 +69,11 @@ const COMPONENTS: &[(&str, &str, &[&str])] = &[
     ("maxListLength", "MaxListLengthConstraintComponent", &[]),
     ("uniqueMembers", "UniqueMembersConstraintComponent", &[]),
     ("memberShape", "MemberShapeConstraintComponent", &[]),
+    (
+        "reifierShape",
+        "ReifierShapeConstraintComponent",
+        &["reificationRequired"],
+    ),
     ("someValue", "SomeValueConstraintComponent", &[]),
     ("rootClass", "RootClassConstraintComponent", &[]),
     ("uniqueValuesFor", "UniqueValuesForConstraintComponent", &[]),
