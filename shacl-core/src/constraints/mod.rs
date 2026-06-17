@@ -317,10 +317,12 @@ fn qualified<G: RdfGraph>(c: &Constraint, is_min: bool) -> Vec<Box<dyn Validator
         param_int(c, count_param),
     ) {
         (Some(shape), Some(bound)) => {
+            let disjoint = param_bool(c, "qualifiedValueShapesDisjoint") == Some(true);
             vec![Box::new(shape::QualifiedValidator {
                 shape,
                 bound,
                 is_min,
+                disjoint,
             }) as Box<dyn Validator<G>>]
         }
         _ => Vec::new(),

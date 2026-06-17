@@ -208,8 +208,10 @@ impl<G: RdfGraph> Validator<G> for SomeValueValidator {
 // ── sh:qualifiedValueShape (§7.8.4) ─────────────────────────────────────────────────────────────
 
 /// `sh:QualifiedMinCountConstraintComponent` / `sh:QualifiedMaxCountConstraintComponent`. The number
-/// of value nodes conforming to the qualified shape must lie within the declared bound. (The
-/// `sh:qualifiedValueShapesDisjoint` refinement, §7.8.4, is a documented gap.)
+/// of value nodes conforming to the qualified shape must lie within the declared bound. When
+/// [`Self::disjoint`] is set (`sh:qualifiedValueShapesDisjoint`, §7.8.4), a value node counts only if
+/// it conforms to *no* sibling qualified shape (the qualified shapes of the parent shape's other
+/// property shapes).
 pub struct QualifiedValidator {
     /// The qualified shape.
     pub shape: ShapeId,
@@ -217,6 +219,8 @@ pub struct QualifiedValidator {
     pub bound: i64,
     /// `true` = `sh:qualifiedMinCount`, `false` = `sh:qualifiedMaxCount`.
     pub is_min: bool,
+    /// `sh:qualifiedValueShapesDisjoint`.
+    pub disjoint: bool,
 }
 
 impl<G: RdfGraph> Validator<G> for QualifiedValidator {
@@ -232,9 +236,17 @@ impl<G: RdfGraph> Validator<G> for QualifiedValidator {
         }
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        let siblings = if self.disjoint {
+            sibling_qualified_shapes(ctx, &self.shape)
+        } else {
+            Vec::new()
+        };
         let conforming = value_nodes
             .iter()
-            .filter(|v| value_conforms(ctx, &self.shape, v))
+            .filter(|v| {
+                value_conforms(ctx, &self.shape, v)
+                    && !siblings.iter().any(|s| value_conforms(ctx, s, v))
+            })
             .count() as i64;
         let violated = if self.is_min {
             conforming < self.bound
@@ -250,6 +262,48 @@ impl<G: RdfGraph> Validator<G> for QualifiedValidator {
             out.push(result_for(ctx, None, comp(component)));
         }
     }
+}
+
+/// The qualified value shapes of the *sibling* property shapes — those referenced via `sh:property`
+/// by a parent shape that also references `me`, excluding `me`'s own qualified shape. Used for
+/// `sh:qualifiedValueShapesDisjoint`.
+fn sibling_qualified_shapes<G: RdfGraph>(ctx: &Ctx<'_, G>, me: &ShapeId) -> Vec<ShapeId> {
+    const SH: &str = "http://www.w3.org/ns/shacl#";
+    let me_id = ctx.shape.id();
+    let mut out = Vec::new();
+    for parent in ctx.registry.values() {
+        let prop_refs: Vec<ShapeId> = parent
+            .constraints()
+            .iter()
+            .filter(|c| c.component.as_str() == format!("{SH}PropertyConstraintComponent"))
+            .flat_map(|c| c.params.iter())
+            .filter(|(p, _)| p.as_str() == format!("{SH}property"))
+            .filter_map(|(_, v)| crate::engine::term_to_shape_id(v))
+            .collect();
+        if !prop_refs.contains(me_id) {
+            continue; // this parent does not reference the current property shape
+        }
+        for q in prop_refs {
+            if &q == me_id {
+                continue;
+            }
+            let Some(qshape) = lookup(ctx.registry, &q) else {
+                continue;
+            };
+            for c in qshape.constraints() {
+                for (p, v) in &c.params {
+                    if p.as_str() == format!("{SH}qualifiedValueShape") {
+                        if let Some(sid) = crate::engine::term_to_shape_id(v) {
+                            if sid != *me && !out.contains(&sid) {
+                                out.push(sid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
 }
 
 // ── sh:memberShape (§7.5.1) ─────────────────────────────────────────────────────────────────────

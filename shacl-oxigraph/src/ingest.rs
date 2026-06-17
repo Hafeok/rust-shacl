@@ -80,12 +80,12 @@ const COMPONENTS: &[(&str, &str, &[&str])] = &[
     (
         "qualifiedMinCount",
         "QualifiedMinCountConstraintComponent",
-        &["qualifiedValueShape"],
+        &["qualifiedValueShape", "qualifiedValueShapesDisjoint"],
     ),
     (
         "qualifiedMaxCount",
         "QualifiedMaxCountConstraintComponent",
-        &["qualifiedValueShape"],
+        &["qualifiedValueShape", "qualifiedValueShapesDisjoint"],
     ),
 ];
 
