@@ -37,12 +37,18 @@ pub struct ValidationReport {
 }
 
 impl ValidationReport {
-    /// `sh:conforms` (§6.7.1.1, `REQ-RPT-2`): true iff the report contains **no** validation results
-    /// at all. Severity is metadata on a result, not a filter — a `sh:Warning` or `sh:Info` result
-    /// still makes the report non-conforming (W3C `core/misc/severity-001`).
+    /// `sh:conforms` (§6.7.1.1, `REQ-RPT-2`): true iff the report contains no result of severity
+    /// `sh:Info`, `sh:Warning`, or `sh:Violation`. A `sh:Warning`/`sh:Info` result still makes the
+    /// report non-conforming (W3C `core/misc/severity-001`), but the diagnostic-only 1.2 severities
+    /// `sh:Trace` and `sh:Debug` do not (W3C `core/misc/severity-004`/`-005`).
     #[must_use]
     pub fn conforms(&self) -> bool {
-        self.results.is_empty()
+        !self.results.iter().any(|r| {
+            matches!(
+                r.severity,
+                Severity::Info | Severity::Warning | Severity::Violation
+            )
+        })
     }
 
     /// Append a result.

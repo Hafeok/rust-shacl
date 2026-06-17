@@ -114,12 +114,12 @@ impl<G: RdfGraph> Validator<G> for DatatypeValidator {
 /// XSD value-space membership is delegated to `oxsdatatypes`' `FromStr` parsers. Datatypes outside
 /// the modelled XSD set — the string family (`xsd:string`, `xsd:token`, `xsd:anyURI`, …) and any
 /// non-XSD datatype (`rdf:langString`, `rdf:HTML`, custom IRIs) — have no lexical constraint we can
-/// check here and are accepted. NOTE: derived integer types are validated as `xsd:integer`, so their
-/// numeric *range* bounds (e.g. `xsd:byte` ∈ −128..=127) are not yet enforced — a documented gap.
+/// check here and are accepted. Derived integer types enforce their value-space bounds via
+/// [`integer_in_range`] (e.g. `xsd:byte` ∈ −128..=127).
 fn lexical_valid(value: &str, dt: &NamedNode) -> bool {
     use oxsdatatypes::{
         Boolean, Date, DateTime, DayTimeDuration, Decimal, Double, Duration, Float, GDay, GMonth,
-        GMonthDay, GYear, GYearMonth, Integer, Time, YearMonthDuration,
+        GMonthDay, GYear, GYearMonth, Time, YearMonthDuration,
     };
     const XSD: &str = "http://www.w3.org/2001/XMLSchema#";
     let Some(local) = dt.as_str().strip_prefix(XSD) else {
@@ -133,9 +133,12 @@ fn lexical_valid(value: &str, dt: &NamedNode) -> bool {
     match local {
         "boolean" => parses!(Boolean),
         "decimal" => parses!(Decimal),
+        // Integer and its derived types: lexical form must be a valid integer AND within the
+        // datatype's value-space bounds (e.g. xsd:byte ∈ −128..=127; "300"^^xsd:byte is ill-formed,
+        // W3C core/property/datatype-ill-formed). `Integer` alone would accept any in-range i64.
         "integer" | "long" | "int" | "short" | "byte" | "nonNegativeInteger"
         | "positiveInteger" | "nonPositiveInteger" | "negativeInteger" | "unsignedLong"
-        | "unsignedInt" | "unsignedShort" | "unsignedByte" => parses!(Integer),
+        | "unsignedInt" | "unsignedShort" | "unsignedByte" => integer_in_range(value, local),
         "float" => parses!(Float),
         "double" => parses!(Double),
         "dateTime" | "dateTimeStamp" => parses!(DateTime),
@@ -155,6 +158,43 @@ fn lexical_valid(value: &str, dt: &NamedNode) -> bool {
     }
 }
 
+/// Is `value` a valid lexical form for the XSD integer type `local`, *and* within its value-space
+/// bounds? Covers `xsd:integer` and its derived types. Values too large for `i128` are accepted only
+/// for the sign-constrained unbounded types (with the right sign).
+fn integer_in_range(value: &str, local: &str) -> bool {
+    let s = value.trim();
+    // Lexical: optional sign then ≥1 ASCII digits (no point, no exponent).
+    let digits = s.strip_prefix(['+', '-']).unwrap_or(s);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return false;
+    }
+    let Ok(n) = s.parse::<i128>() else {
+        // Beyond i128: only unbounded types can still match, by sign.
+        let neg = s.starts_with('-');
+        return match local {
+            "nonPositiveInteger" | "negativeInteger" => neg,
+            "integer" => true,
+            _ => !neg, // nonNegativeInteger, positiveInteger, unsigned* — only positive magnitudes
+        };
+    };
+    match local {
+        "integer" => true,
+        "long" => i64::try_from(n).is_ok(),
+        "int" => i32::try_from(n).is_ok(),
+        "short" => i16::try_from(n).is_ok(),
+        "byte" => i8::try_from(n).is_ok(),
+        "unsignedLong" => (0..=u64::MAX as i128).contains(&n),
+        "unsignedInt" => (0..=u32::MAX as i128).contains(&n),
+        "unsignedShort" => (0..=u16::MAX as i128).contains(&n),
+        "unsignedByte" => (0..=u8::MAX as i128).contains(&n),
+        "nonNegativeInteger" => n >= 0,
+        "positiveInteger" => n > 0,
+        "nonPositiveInteger" => n <= 0,
+        "negativeInteger" => n < 0,
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +205,30 @@ mod tests {
         assert!(NodeKind::Iri.admits(&iri));
         let lit = Term::Literal(shacl_model::term::Literal::new_simple_literal("x"));
         assert!(!NodeKind::Iri.admits(&lit));
+    }
+
+    #[test]
+    fn derived_integer_ranges_enforced() {
+        let xsd =
+            |t: &str| NamedNode::new_unchecked(format!("http://www.w3.org/2001/XMLSchema#{t}"));
+        // byte ∈ −128..=127
+        assert!(lexical_valid("127", &xsd("byte")));
+        assert!(lexical_valid("-128", &xsd("byte")));
+        assert!(!lexical_valid("300", &xsd("byte")));
+        assert!(!lexical_valid("c", &xsd("byte")));
+        // unsignedByte ∈ 0..=255
+        assert!(lexical_valid("255", &xsd("unsignedByte")));
+        assert!(!lexical_valid("-1", &xsd("unsignedByte")));
+        // sign-constrained
+        assert!(!lexical_valid("0", &xsd("positiveInteger")));
+        assert!(lexical_valid("1", &xsd("positiveInteger")));
+        assert!(!lexical_valid("5", &xsd("negativeInteger")));
+        // plain integer unbounded
+        assert!(lexical_valid(
+            "99999999999999999999999999999",
+            &xsd("integer")
+        ));
+        // wrong lexical form
+        assert!(!lexical_valid("1.5", &xsd("integer")));
     }
 }

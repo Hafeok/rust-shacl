@@ -137,8 +137,17 @@ impl<G: RdfGraph> Validator<G> for PatternValidator {
 
 // ── sh:singleLine (§7.4.4, new in 1.2) ──────────────────────────────────────────────────────────
 
+/// A line-break character: LF, CR, form feed, vertical tab, NEL, line/paragraph separator. A value
+/// containing any of these is multi-line for `sh:singleLine` (W3C `core/property/singleLine-001`).
+fn is_line_break(c: char) -> bool {
+    matches!(
+        c,
+        '\n' | '\r' | '\u{000B}' | '\u{000C}' | '\u{0085}' | '\u{2028}' | '\u{2029}'
+    )
+}
+
 /// `sh:SingleLineConstraintComponent`. When enabled, a value node's string form must contain no
-/// line break (`\n` or `\r`). Blank nodes violate. (1.2 draft semantics — best effort.)
+/// line break (see [`is_line_break`]). Blank nodes violate.
 pub struct SingleLineValidator;
 
 impl<G: RdfGraph> Validator<G> for SingleLineValidator {
@@ -147,7 +156,7 @@ impl<G: RdfGraph> Validator<G> for SingleLineValidator {
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
-            let ok = string_form(v).is_some_and(|s| !s.contains(['\n', '\r']));
+            let ok = string_form(v).is_some_and(|s| !s.contains(is_line_break));
             if !ok {
                 out.push(result_for(
                     ctx,

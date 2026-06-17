@@ -155,7 +155,12 @@ suite. They group into **runner gaps** (the harness loads the wrong graph), **ch
 **medium 1.2 enhancements**, and **larger 1.2 features**. Work the tiers top-down — each tier is
 independently shippable with its own test-count win.
 
-### Tier 1 — runner + cheap fixes (~10 tests, low effort)
+### Tier 1 — runner + cheap fixes — ✅ DONE (101 → 109)
+All four landed: **R1** multi-file loading (+4), **R2** Trace/Debug severities (+2), **R3**
+`sh:singleLine` whitespace (+1), **R4** derived-integer range in `sh:datatype` (+1). Fixtures added
+for severity-004/005 + singleLine-001; `derived_integer_ranges_enforced` unit test in `value_type`.
+
+#### Original notes (kept for reference)
 
 - **R1. Multi-file test loading** — *runner*, ~5 clean wins (+ partials). Several tests use
   `sht:dataGraph <foo-data.ttl>` / `sht:shapesGraph <foo-shapes.ttl>` instead of `<>`; the runner
