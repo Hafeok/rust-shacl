@@ -5,39 +5,11 @@
 //! simplest component, and the one chosen to wire up validator dispatch + report construction
 //! end-to-end first (§11.5 step 6). `class` and `datatype` are sketched against their packets.
 
+use super::{comp, result_for};
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
 use crate::validator::{Ctx, Validator};
 use shacl_model::term::{NamedNode, NamedNodeRef, NodeKind, Term};
-
-const SH: &str = "http://www.w3.org/ns/shacl#";
-
-fn comp(name: &str) -> NamedNode {
-    NamedNode::new_unchecked(format!("{SH}{name}"))
-}
-
-fn result_for(
-    ctx: &Ctx<'_, impl RdfGraph>,
-    value: Option<Term>,
-    component: NamedNode,
-) -> ValidationResult {
-    ValidationResult {
-        focus_node: ctx.focus.clone(),
-        result_path: ctx.path_sparql.clone(),
-        value,
-        source_constraint_component: component,
-        source_shape: shape_id_of(ctx),
-        severity: ctx.severity,
-        messages: Vec::new(), // populated from sh:message by the engine (REQ-ING-9)
-    }
-}
-
-fn shape_id_of(ctx: &Ctx<'_, impl RdfGraph>) -> shacl_model::shape::ShapeId {
-    match ctx.shape {
-        shacl_model::shape::Shape::Node(n) => n.id.clone(),
-        shacl_model::shape::Shape::Property(p) => p.id.clone(),
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CMP-NODEKIND — sh:nodeKind (§7.1.3). FULLY IMPLEMENTED.

@@ -28,9 +28,53 @@ should have green tests before the next. Status legend: ✅ done · 🟡 in prog
    wired; 8 engine tests in `shacl-oxigraph/tests/engine.rs`.
 7. ✅ **CMP-CLASS, CMP-DATATYPE** — `is_shacl_instance` (subclass walk) drives class; datatype now
    does full lexical validation via `oxsdatatypes` (REQ-DATATYPE-2). Both green.
-8. ⬜ Remaining §7 components: cardinality → range → string → pair → logical → shape → list → other.
+8. 🟡 Remaining §7 components: cardinality → range → string → pair → logical → shape → list → other.
+   In progress — Phase 8a (cardinality) underway. See **Build plan** below for the phase breakdown.
 9. ⬜ **shacl-sparql** (§8): prefixes → constraints → components → prebinding seam (ADR-008). All stubs.
 10. ⬜ **conformance matrix** + W3C 1.2 testsuite runner (§10). `shacl-testsuite` is a stub.
+
+## Build plan (phased) — remaining work, dependency-ordered
+
+Each phase is gated on green tests before the next. Components = one `Validator` impl + one
+`dispatch` arm + table-driven `MemGraph` tests. Pure-term components first; graph-walking next;
+recursion-bearing ones gated behind the SCC guard (9b).
+
+### Phase 8 — remaining §7 components
+- **8a. Cardinality (§7.2)** — ✅ `CMP-MINCOUNT` + `CMP-MAXCOUNT`. Results carry no `sh:value`
+  (violation is the count). Hoisted shared `comp`/`result_for` helpers into `constraints/mod.rs`;
+  added `param_int`. 6 tests in `shacl-oxigraph/tests/cardinality.rs` (boundary + distinct-count).
+- **8b. String, set membership, range (no recursion)** — `CMP-LENGTH-*` (§7.4), `CMP-PATTERN` /
+  `CMP-SINGLELINE` (fancy-regex, ADR-005), `CMP-LANGUAGEIN` / `CMP-UNIQUELANG`, `CMP-HASVALUE` /
+  `CMP-IN` (§7.9). Range `CMP-RANGE-*` (§7.3) needs one shared `oxsdatatypes` ordered comparator —
+  this also closes the logged derived-integer range-bound gap.
+- **8c. Property-pair (§7.6)** — `sh:equals/disjoint/subsetOf/lessThan/lessThanOrEquals`; second
+  path eval against the focus (reuse `reach`).
+- **8d. List (§7.5, new in 1.2)** — `rdf:List` walker; `sh:minListLength/maxListLength/uniqueMembers`
+  no-recursion; `sh:memberShape` recurses → gate behind 9b.
+- **8e. `sh:closed`/`sh:rootClass`/`sh:uniqueValuesFor` (§7.9)** — node-level property-set checks.
+
+### Phase 9 — cross-cutting infra (interleave, not strictly after 8)
+- **9a. Report RDF serialization** (finishes step 5) — `ValidationReport → Turtle` (REQ-RPT-2/3).
+  Do early: the testsuite runner diffs serialized output.
+- **9b. Recursion / cycle guard** (ADR-002, §9.1) — Tarjan SCC over the shape-ref graph. **Hard gate**
+  before 8d's `sh:memberShape` and all of 9c.
+- **9c. Shape-logic + shape-ref (§7.7–7.8)** — `sh:not/and/or/xone`, `sh:node/property/someValue/
+  qualifiedValueShape`. Needs a shape registry + conformance-checking entry point. After 9b.
+
+### Phase 10 — ingestion (unblocks real fixtures)
+Turtle → `Shape` (`oxttl` rdf-12, REQ-ING-*); ill-formedness detection (REQ-ING-3/4/5);
+`sh:message` → `sh:resultMessage` (REQ-ING-9); then `sh:targetWhere` (REQ-TGT-5) + explicit
+`sh:shape` data targets (REQ-TGT-6).
+
+### Phase 11 — SHACL-SPARQL (§8, L2)
+`oxigraph::Store` `SparqlGraph` adapter → prefixes → SPARQL constraints (`sh:sparql`) → SPARQL
+components → pre-binding seam (ADR-008).
+
+### Phase 12 — conformance testsuite (§10)
+W3C 1.2 manifests → `shacl-testsuite` runner (graph-isomorphic diff, REQ-TS-2) → matrix + CI gate.
+
+**Critical path:** 9a + Phase 10 are the unlocks (real `.ttl` fixtures vs hand-built `MemGraph`).
+9b blocks `sh:memberShape` and 9c. 8a–8c can proceed now with no new infra.
 
 ## Cross-cutting pieces
 - ✅ The validation **engine** (`engine::validate`): shape → targets → value nodes → dispatch → report.
