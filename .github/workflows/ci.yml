@@ -4,7 +4,7 @@ jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # MSRV: oxigraph 0.5.x / oxrdf 0.3.x require rustc 1.87 (matches rust-toolchain.toml).
       - uses: dtolnay/rust-toolchain@1.87
         with:
@@ -38,6 +38,6 @@ jobs:
   cargo-deny:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       # Supply-chain gate: advisories, licenses, bans, sources (see deny.toml).
       - uses: EmbarkStudios/cargo-deny-action@v2
