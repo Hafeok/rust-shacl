@@ -150,10 +150,44 @@ fn parse_turtle(turtle: &str, base: Option<&str>) -> Result<MemGraph, String> {
 
 /// Extract every shape from the parsed graph.
 fn shapes_from_graph(g: &MemGraph) -> Vec<Shape> {
+    let deactivated = reifier_deactivations(g);
     collect_shape_nodes(g)
         .into_iter()
-        .map(|node| build_shape(g, &node))
+        .map(|node| build_shape(g, &node, &deactivated))
         .collect()
+}
+
+/// Per-constraint deactivation via RDF-1.2 reifier annotations (`§3.1.6`): a constraint triple
+/// `(s, p, o)` written `s p o {| sh:deactivated true |}` is parsed by `oxttl` into the base triple
+/// plus a reifier blank node `r` with `r rdf:reifies <<(s p o)>>` and `r sh:deactivated true`. This
+/// returns the set of `"s|p|o"` keys of such deactivated constraint triples.
+fn reifier_deactivations(g: &MemGraph) -> BTreeSet<String> {
+    let reifies = rdf("reifies");
+    let deact = sh("deactivated");
+    let mut deactivated_reifiers: BTreeSet<String> = BTreeSet::new();
+    for t in g.triples(None, Some(&deact), None) {
+        if matches!(&t.object, Term::Literal(l) if l.value() == "true") {
+            deactivated_reifiers.insert(t.subject.to_string());
+        }
+    }
+    let mut out = BTreeSet::new();
+    for t in g.triples(None, Some(&reifies), None) {
+        if !deactivated_reifiers.contains(&t.subject.to_string()) {
+            continue;
+        }
+        if let Term::Triple(inner) = &t.object {
+            out.insert(format!(
+                "{}|{}|{}",
+                inner.subject, inner.predicate, inner.object
+            ));
+        }
+    }
+    out
+}
+
+/// The `"s|p|o"` key for a constraint triple (matches the keys from [`reifier_deactivations`]).
+fn triple_key(subject: &Term, predicate: &NamedNode, object: &Term) -> String {
+    format!("{subject}|{predicate}|{object}")
 }
 
 /// Collect the subjects that denote shapes: any subject of `sh:path`, a target predicate, a
@@ -197,14 +231,14 @@ fn collect_shape_nodes(g: &MemGraph) -> Vec<Term> {
 }
 
 /// Build one [`Shape`] for the given node.
-fn build_shape(g: &MemGraph, node: &Term) -> Shape {
+fn build_shape(g: &MemGraph, node: &Term, deactivated_triples: &BTreeSet<String>) -> Shape {
     let id = match node {
         Term::NamedNode(n) => ShapeId::Named(n.clone()),
         Term::BlankNode(b) => ShapeId::Blank(b.as_str().to_string()),
         _ => ShapeId::Blank("invalid".to_string()),
     };
     let targets = parse_targets(g, node);
-    let constraints = parse_constraints(g, node);
+    let constraints = parse_constraints(g, node, deactivated_triples);
     let severity = parse_severity(g, node);
     let deactivated = bool_value(g, node, &sh("deactivated"));
 
@@ -273,7 +307,11 @@ fn parse_targets(g: &MemGraph, node: &Term) -> Vec<Target> {
     targets
 }
 
-fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
+fn parse_constraints(
+    g: &MemGraph,
+    node: &Term,
+    deactivated_triples: &BTreeSet<String>,
+) -> Vec<Constraint> {
     let mut out = Vec::new();
 
     // sh:class is special (§7.1.1): plain/repeated values are conjuncts (instance of *all*), but a
@@ -317,6 +355,13 @@ fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
         if g.objects(node, &primary_pred).is_empty() {
             continue;
         }
+        // Per-constraint deactivation (§3.1.6): the constraint is off if its primary triple carries
+        // a `{| sh:deactivated true |}` reifier annotation.
+        let deactivated = g
+            .objects(node, &primary_pred)
+            .iter()
+            .any(|v| deactivated_triples.contains(&triple_key(node, &primary_pred, v)));
+
         let primary_values = param_values(g, node, primary, &primary_pred);
         let mut params: Vec<(NamedNode, Term)> = primary_values
             .into_iter()
@@ -332,7 +377,7 @@ fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
             component: sh(component),
             params,
             severity: None,
-            deactivated: false,
+            deactivated,
         });
     }
     out
