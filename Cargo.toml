@@ -31,7 +31,7 @@ oxigraph = { version = "0.5", default-features = false, features = ["rdf-12"] }
 # XSD lexical/value-space validation for sh:datatype — ADR-010, REQ-DATATYPE-2.
 oxsdatatypes = "0.2"
 # sh:pattern needs XPath/SPARQL REGEX semantics; std `regex` diverges — ADR-005.
-fancy-regex = "0.13"
+fancy-regex = "0.18"
 # Deterministic, insertion-ordered set for NodeSet — oxrdf `Term` is Hash+Eq but not Ord, so
 # BTreeSet is unavailable; IndexSet preserves the "dedup + reproducible order" intent (§4.1 NodeSet).
 indexmap = "2"
