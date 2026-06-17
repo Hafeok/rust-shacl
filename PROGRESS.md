@@ -86,9 +86,16 @@ end-to-end tests in `shacl-oxigraph/tests/ingest.rs`.
 explicit ill-formedness *diagnostics* (REQ-ING-3/4/5 — currently ill-formed params are silently
 skipped, not flagged); `sh:targetWhere` (REQ-TGT-5) + explicit `sh:shape` data targets (REQ-TGT-6).
 
-### Phase 11 — SHACL-SPARQL (§8, L2)
-`oxigraph::Store` `SparqlGraph` adapter → prefixes → SPARQL constraints (`sh:sparql`) → SPARQL
-components → pre-binding seam (ADR-008).
+### Phase 11 — SHACL-SPARQL (§8, L2) — ✅ core done
+✅ `shacl-oxigraph::store::OxiStore`: `oxigraph::Store` implementing `RdfGraph` (pattern access via
+`quads_for_pattern`) + `SparqlGraph` (SELECT/ASK via `SparqlEvaluator`). Pre-binding (§8.4, ADR-008)
+as a `VALUES`-injection of the `$`-sigil variables (preserves `$this` projection).
+✅ `shacl-sparql::constraint::validate_select` (§8.1, REQ-SPQ-1..6): `this` pre-bound, one result per
+non-`failure` solution, REQ-SPQ-5 property mapping, failure-vs-violation distinction. `prefixes`
+helper for `PREFIX` prepending. 5 tests in `shacl-oxigraph/tests/sparql.rs`.
+⬜ Deferred: SPARQL-based **components** (§8.2, `sh:validator`/`sh:nodeValidator`), full prefix
+collection (REQ-SPQ-13 property path), pre-binding restriction enforcement (REQ-SPQ-15), and wiring
+SPARQL constraints into the engine dispatch (the L1 engine is `RdfGraph`-only by `REQ-ARCH-1`).
 
 ### Phase 12 — conformance testsuite (§10)
 W3C 1.2 manifests → `shacl-testsuite` runner (graph-isomorphic diff, REQ-TS-2) → matrix + CI gate.

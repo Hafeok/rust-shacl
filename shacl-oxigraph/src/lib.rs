@@ -5,3 +5,4 @@
 
 pub mod ingest;
 pub mod mem;
+pub mod store;
