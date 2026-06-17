@@ -41,6 +41,16 @@ pub enum Shape {
     Property(PropertyShape),
 }
 
+/// A SPARQL-based constraint (`sh:sparql` → `sh:SPARQLConstraint`, §8.1). Held on the shape so a
+/// SPARQL-capable backend can run it; the Core engine ignores it.
+#[derive(Debug, Clone)]
+pub struct SparqlConstraint {
+    /// The `sh:select` query text (projects `$this`).
+    pub select: String,
+    /// `sh:message`s for results this constraint produces (`REQ-SPQ-5`).
+    pub messages: Vec<String>,
+}
+
 /// A node shape (§3.2): no `sh:path`.
 #[derive(Debug, Clone)]
 pub struct NodeShape {
@@ -50,6 +60,10 @@ pub struct NodeShape {
     pub targets: Vec<crate::target::Target>,
     /// Declared constraints (component IRI + parameter values), pre-grouped per `REQ-ING-4`.
     pub constraints: Vec<Constraint>,
+    /// `sh:message`s declared on this shape, copied to its results' `sh:resultMessage` (`REQ-ING-9`).
+    pub messages: Vec<String>,
+    /// SPARQL-based constraints (`sh:sparql`, §8.1); run only by a SPARQL backend.
+    pub sparql: Vec<SparqlConstraint>,
     /// Effective severity (§3.1.4).
     pub severity: Severity,
     /// `sh:deactivated` resolved to a constant in Core (`REQ-ING-10`).
@@ -67,6 +81,10 @@ pub struct PropertyShape {
     pub targets: Vec<crate::target::Target>,
     /// Declared constraints.
     pub constraints: Vec<Constraint>,
+    /// `sh:message`s declared on this shape, copied to its results' `sh:resultMessage` (`REQ-ING-9`).
+    pub messages: Vec<String>,
+    /// SPARQL-based constraints (`sh:sparql`, §8.1); run only by a SPARQL backend.
+    pub sparql: Vec<SparqlConstraint>,
     /// Effective severity.
     pub severity: Severity,
     /// `sh:deactivated`.
@@ -116,6 +134,24 @@ impl Shape {
         match self {
             Shape::Node(n) => n.deactivated,
             Shape::Property(p) => p.deactivated,
+        }
+    }
+
+    /// `sh:message`s declared on this shape, copied to its results' `sh:resultMessage` (`REQ-ING-9`).
+    #[must_use]
+    pub fn messages(&self) -> &[String] {
+        match self {
+            Shape::Node(n) => &n.messages,
+            Shape::Property(p) => &p.messages,
+        }
+    }
+
+    /// SPARQL-based constraints declared on this shape (`sh:sparql`, §8.1).
+    #[must_use]
+    pub fn sparql(&self) -> &[SparqlConstraint] {
+        match self {
+            Shape::Node(n) => &n.sparql,
+            Shape::Property(p) => &p.sparql,
         }
     }
 }

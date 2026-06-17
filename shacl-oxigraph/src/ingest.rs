@@ -13,7 +13,9 @@ use crate::mem::MemGraph;
 use shacl_core::constraints::list::rdf_list;
 use shacl_core::RdfGraph;
 use shacl_model::path::Path;
-use shacl_model::shape::{Constraint, NodeShape, PropertyShape, Severity, Shape, ShapeId};
+use shacl_model::shape::{
+    Constraint, NodeShape, PropertyShape, Severity, Shape, ShapeId, SparqlConstraint,
+};
 use shacl_model::target::Target;
 use shacl_model::term::{NamedNode, NamedOrBlankNode, Term};
 use std::collections::BTreeSet;
@@ -253,6 +255,8 @@ fn build_shape(g: &MemGraph, node: &Term, deactivated_triples: &BTreeSet<String>
     let constraints = parse_constraints(g, node, deactivated_triples);
     let severity = parse_severity(g, node);
     let deactivated = bool_value(g, node, &sh("deactivated"));
+    let messages = string_values(g, node, &sh("message"));
+    let sparql = parse_sparql_constraints(g, node);
 
     // A property shape is one with a sh:path; everything else is a node shape (REQ-ING-2).
     match single_object(g, node, &sh("path")).and_then(|p| parse_path(g, &p)) {
@@ -261,6 +265,8 @@ fn build_shape(g: &MemGraph, node: &Term, deactivated_triples: &BTreeSet<String>
             path,
             targets,
             constraints,
+            messages,
+            sparql,
             severity,
             deactivated,
         }),
@@ -268,10 +274,38 @@ fn build_shape(g: &MemGraph, node: &Term, deactivated_triples: &BTreeSet<String>
             id,
             targets,
             constraints,
+            messages,
+            sparql,
             severity,
             deactivated,
         }),
     }
+}
+
+/// The string (lexical-form) values of `(node, pred, *)` literals, in order.
+fn string_values(g: &MemGraph, node: &Term, pred: &NamedNode) -> Vec<String> {
+    g.objects(node, pred)
+        .into_iter()
+        .filter_map(|t| match t {
+            Term::Literal(l) => Some(l.value().to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Parse `sh:sparql` SPARQL-based constraints (§8.1): each value is an `sh:SPARQLConstraint` blank
+/// node with `sh:select` (+ optional `sh:message`).
+fn parse_sparql_constraints(g: &MemGraph, node: &Term) -> Vec<SparqlConstraint> {
+    let mut out = Vec::new();
+    for c in g.objects(node, &sh("sparql")) {
+        if let Some(Term::Literal(select)) = single_object(g, &c, &sh("select")) {
+            out.push(SparqlConstraint {
+                select: select.value().to_string(),
+                messages: string_values(g, &c, &sh("message")),
+            });
+        }
+    }
+    out
 }
 
 fn parse_targets(g: &MemGraph, node: &Term) -> Vec<Target> {

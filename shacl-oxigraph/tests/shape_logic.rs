@@ -39,6 +39,8 @@ fn nshape(name: &str, targets: Vec<Target>, constraints: Vec<Constraint>) -> Sha
         id: id(name),
         targets,
         constraints,
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     })
@@ -77,6 +79,8 @@ fn not_negates_inner_shape() {
             "NotConstraintComponent",
             vec![(sh("not"), Term::NamedNode(iri("Inner")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });
@@ -203,6 +207,8 @@ fn node_summarises_property_bubbles() {
                 )),
             )],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });
@@ -216,6 +222,8 @@ fn node_summarises_property_bubbles() {
             "NodeConstraintComponent",
             vec![(sh("node"), Term::NamedNode(iri("Inner")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });
@@ -235,6 +243,8 @@ fn node_summarises_property_bubbles() {
             "PropertyConstraintComponent",
             vec![(sh("property"), Term::NamedNode(iri("Inner")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });
@@ -275,6 +285,8 @@ fn qualified_min_count() {
                 ),
             ],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });
@@ -299,6 +311,8 @@ fn closed_rejects_extra_predicates() {
         path: Path::Predicate(iri("p")),
         targets: vec![],
         constraints: vec![],
+        messages: vec![],
+        sparql: vec![],
         severity: Severity::default(),
         deactivated: false,
     });

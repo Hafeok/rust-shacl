@@ -42,6 +42,8 @@ fn node_shape(targets: Vec<shacl_model::target::Target>, constraints: Vec<Constr
         id: ShapeId::Named(iri("Shape")),
         targets,
         constraints,
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     })
@@ -67,6 +69,8 @@ fn nodekind_iri_violation_on_literal_value() {
             "NodeKindConstraintComponent",
             vec![(sh("nodeKind"), Term::NamedNode(sh("IRI")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });
@@ -154,6 +158,8 @@ fn datatype_matches_and_lexical_placeholder() {
             "DatatypeConstraintComponent",
             vec![(sh("datatype"), Term::NamedNode(xsd("integer")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });
@@ -180,6 +186,8 @@ fn datatype_illformed_lexical_violates_even_with_matching_iri() {
             "DatatypeConstraintComponent",
             vec![(sh("datatype"), Term::NamedNode(xsd("integer")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });
@@ -210,6 +218,8 @@ fn datatype_wrong_iri_violates() {
             "DatatypeConstraintComponent",
             vec![(sh("datatype"), Term::NamedNode(xsd("string")))],
         )],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });

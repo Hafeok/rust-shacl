@@ -23,6 +23,12 @@ pub struct OxiStore {
 }
 
 impl OxiStore {
+    /// Wrap an existing `oxigraph::Store` (e.g. a host application's own store).
+    #[must_use]
+    pub fn new(store: Store) -> Self {
+        OxiStore { store }
+    }
+
     /// Load a Turtle 1.2 document into a fresh in-memory store.
     pub fn from_turtle(turtle: &str) -> Result<Self, String> {
         let store = Store::new().map_err(|e| e.to_string())?;

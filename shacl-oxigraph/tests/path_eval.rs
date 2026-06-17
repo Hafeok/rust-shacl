@@ -120,6 +120,8 @@ fn value_nodes_of_node_shape_is_focus() {
         id: dummy_id(),
         targets: vec![],
         constraints: vec![],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });
@@ -134,6 +136,8 @@ fn value_nodes_of_property_shape_follows_path() {
         path: pred("p"),
         targets: vec![],
         constraints: vec![],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     });

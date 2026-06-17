@@ -6,3 +6,6 @@
 pub mod ingest;
 pub mod mem;
 pub mod store;
+pub mod validate;
+
+pub use validate::{validate_store, validate_turtle};

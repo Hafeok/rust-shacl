@@ -173,7 +173,7 @@ impl<G: RdfGraph> Validator<G> for ClosedValidator {
                 source_constraint_component: comp("ClosedConstraintComponent"),
                 source_shape: ctx.shape.id().clone(),
                 severity: ctx.severity,
-                messages: Vec::new(),
+                messages: ctx.shape.messages().to_vec(),
             });
         }
     }

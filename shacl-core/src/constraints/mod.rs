@@ -51,7 +51,7 @@ pub(crate) fn result_for(
         source_constraint_component: component,
         source_shape: ctx.shape.id().clone(),
         severity: ctx.severity,
-        messages: Vec::new(),
+        messages: ctx.shape.messages().to_vec(), // sh:message → sh:resultMessage (REQ-ING-9)
     }
 }
 

@@ -83,21 +83,25 @@ pub fn shape_ref_cycle(shapes: &[Shape]) -> Option<ShapeId> {
         let mut stack: Vec<(ShapeId, usize)> = vec![(start.clone(), 0)];
         state.insert(start.clone(), Mark::Grey);
         while let Some((node, idx)) = stack.last().cloned() {
-            let children = &adj[&node];
-            if idx < children.len() {
-                stack.last_mut().unwrap().1 += 1;
-                let child = &children[idx];
-                match state.get(child) {
-                    Some(Mark::Grey) => return Some(child.clone()), // back edge → cycle
-                    Some(Mark::Black) => {}
-                    None => {
-                        state.insert(child.clone(), Mark::Grey);
-                        stack.push((child.clone(), 0));
+            let children = adj.get(&node).map_or(&[][..], Vec::as_slice);
+            match children.get(idx) {
+                Some(child) => {
+                    if let Some(frame) = stack.last_mut() {
+                        frame.1 += 1;
+                    }
+                    match state.get(child) {
+                        Some(Mark::Grey) => return Some(child.clone()), // back edge → cycle
+                        Some(Mark::Black) => {}
+                        None => {
+                            state.insert(child.clone(), Mark::Grey);
+                            stack.push((child.clone(), 0));
+                        }
                     }
                 }
-            } else {
-                state.insert(node, Mark::Black);
-                stack.pop();
+                None => {
+                    state.insert(node, Mark::Black);
+                    stack.pop();
+                }
             }
         }
     }
@@ -133,6 +137,8 @@ mod tests {
         Shape::Node(NodeShape {
             id: id(name),
             targets: vec![],
+            messages: vec![],
+            sparql: vec![],
             constraints: vec![Constraint {
                 component: sh("NodeConstraintComponent"),
                 params,

@@ -41,6 +41,8 @@ fn shape(component: &str, param: &str, count: &str) -> Shape {
             severity: None,
             deactivated: false,
         }],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     })

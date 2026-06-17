@@ -45,6 +45,8 @@ fn shape(component: &str, params: Vec<(NamedNode, Term)>) -> Shape {
             severity: None,
             deactivated: false,
         }],
+        messages: vec![],
+        sparql: vec![],
         severity: Default::default(),
         deactivated: false,
     })
