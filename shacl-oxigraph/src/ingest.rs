@@ -246,12 +246,14 @@ fn parse_targets(g: &MemGraph, node: &Term) -> Vec<Target> {
             targets.push(Target::ObjectsOf(p));
         }
     }
-    // Implicit class target (REQ-TGT-3): an IRI shape that is also an rdfs:Class.
+    // Implicit class target (REQ-TGT-3): an IRI shape that is also a class — typed `rdfs:Class`
+    // (incl. via subtypes like `owl:Class`) or, in 1.2, `sh:ShapeClass`.
     if let Term::NamedNode(n) = node {
-        let is_class = g
-            .objects(node, &rdf("type"))
-            .iter()
-            .any(|t| matches!(t, Term::NamedNode(c) if c.as_str() == format!("{RDFS}Class")));
+        let rdfs_class = format!("{RDFS}Class");
+        let shape_class = format!("{SH}ShapeClass");
+        let is_class = g.objects(node, &rdf("type")).iter().any(|t| {
+            matches!(t, Term::NamedNode(c) if c.as_str() == rdfs_class || c.as_str() == shape_class)
+        });
         if is_class {
             targets.push(Target::ImplicitClass(n.clone()));
         }
