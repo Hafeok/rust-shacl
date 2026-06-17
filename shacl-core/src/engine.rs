@@ -53,7 +53,7 @@ pub fn validate<G: RdfGraph>(data: &G, shapes: &[Shape]) -> ValidationReport {
         if shape.deactivated() {
             continue;
         }
-        for focus in focus_nodes(data, shape) {
+        for focus in focus_nodes(data, &registry, shape) {
             report
                 .results
                 .extend(validate_focus_collect(data, &registry, shape, &focus, 0));
@@ -153,11 +153,11 @@ pub fn term_to_shape_id(t: &Term) -> Option<ShapeId> {
 /// Resolve a shape's target declarations to the set of focus nodes (§3.1.3, `REQ-TGT-1..6`),
 /// deduplicated and order-stable.
 ///
-/// `sh:targetWhere` (`REQ-TGT-5`, ADR-007) and explicit `sh:shape` data-graph targets (`REQ-TGT-6`)
-/// need a shape registry / data-graph shape links and are wired in a later step; they contribute no
-/// focus nodes yet.
+/// `sh:targetWhere` (`REQ-TGT-5`, ADR-007): naive iteration — every node in the data graph that
+/// *conforms* to the inner shape becomes a focus node. Explicit `sh:shape` data-graph links
+/// (`REQ-TGT-6`) are resolved unconditionally for every named shape.
 #[must_use]
-pub fn focus_nodes<G: RdfGraph>(data: &G, shape: &Shape) -> Vec<Term> {
+pub fn focus_nodes<G: RdfGraph>(data: &G, registry: &Registry<'_>, shape: &Shape) -> Vec<Term> {
     let mut out: Vec<Term> = Vec::new();
     let mut seen: HashSet<Term> = HashSet::new();
     let push = |t: Term, out: &mut Vec<Term>, seen: &mut HashSet<Term>| {
@@ -166,8 +166,27 @@ pub fn focus_nodes<G: RdfGraph>(data: &G, shape: &Shape) -> Vec<Term> {
         }
     };
 
+    // REQ-TGT-6: any data triple `(n, sh:shape, thisShape)` makes `n` a focus node.
+    if let ShapeId::Named(iri) = shape.id() {
+        let sh_shape = NamedNode::new_unchecked("http://www.w3.org/ns/shacl#shape");
+        let obj = Term::NamedNode(iri.clone());
+        for t in data.triples(None, Some(&sh_shape), Some(&obj)) {
+            push(t.subject, &mut out, &mut seen);
+        }
+    }
+
     for target in shape.targets() {
         match target {
+            // REQ-TGT-5: nodes conforming to the inner shape (naive iteration, ADR-007).
+            Target::Where(id) => {
+                if let Some(wshape) = lookup(registry, id) {
+                    for node in candidate_nodes(data) {
+                        if conforms(data, registry, wshape, &node, 0) {
+                            push(node, &mut out, &mut seen);
+                        }
+                    }
+                }
+            }
             // REQ-TGT-1: explicit node(s).
             Target::Node(t) => push(t.clone(), &mut out, &mut seen),
 
@@ -193,8 +212,24 @@ pub fn focus_nodes<G: RdfGraph>(data: &G, shape: &Shape) -> Vec<Term> {
                 }
             }
 
-            // Not yet wired (see fn docs).
-            Target::Where(_) | Target::ExplicitShape => {}
+            // ExplicitShape is resolved above (REQ-TGT-6), independent of declared targets.
+            Target::ExplicitShape => {}
+        }
+    }
+    out
+}
+
+/// All distinct terms appearing as a subject or object in the data graph — the candidate focus nodes
+/// for `sh:targetWhere`'s naive iteration.
+fn candidate_nodes<G: RdfGraph>(data: &G) -> Vec<Term> {
+    let mut seen: HashSet<Term> = HashSet::new();
+    let mut out = Vec::new();
+    for t in data.triples(None, None, None) {
+        if seen.insert(t.subject.clone()) {
+            out.push(t.subject);
+        }
+        if seen.insert(t.object.clone()) {
+            out.push(t.object);
         }
     }
     out

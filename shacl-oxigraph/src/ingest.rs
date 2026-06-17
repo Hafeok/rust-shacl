@@ -248,6 +248,16 @@ fn parse_targets(g: &MemGraph, node: &Term) -> Vec<Target> {
             targets.push(Target::ObjectsOf(p));
         }
     }
+    // sh:targetWhere (REQ-TGT-5): the value is an (inline) shape; nodes conforming to it are foci.
+    for t in g.objects(node, &sh("targetWhere")) {
+        match t {
+            Term::NamedNode(n) => targets.push(Target::Where(ShapeId::Named(n))),
+            Term::BlankNode(b) => {
+                targets.push(Target::Where(ShapeId::Blank(b.as_str().to_string())))
+            }
+            _ => {}
+        }
+    }
     // Implicit class target (REQ-TGT-3): an IRI shape that is also a class — typed `rdfs:Class`
     // (incl. via subtypes like `owl:Class`) or, in 1.2, `sh:ShapeClass`.
     if let Term::NamedNode(n) = node {
