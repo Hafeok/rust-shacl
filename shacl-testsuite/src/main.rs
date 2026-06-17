@@ -4,7 +4,7 @@
 //! `<dir>` (e.g. a checkout of `w3c/data-shapes` `shacl12-test-suite/tests/core`), printing a
 //! per-test pass/fail line and a summary. Exit code is non-zero if any test fails.
 
-use shacl_testsuite::{run_test_file, Verdict};
+use shacl_testsuite::{run_test_file_at, Verdict};
 use std::path::{Path, PathBuf};
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
         if !ttl.contains("sht:Validate") && !ttl.contains("shacl-test#Validate") {
             continue;
         }
-        match run_test_file(&ttl) {
+        match run_test_file_at(f) {
             Verdict::Pass => {
                 pass += 1;
                 println!("PASS {}", f.display());
