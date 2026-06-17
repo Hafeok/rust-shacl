@@ -276,7 +276,42 @@ fn parse_targets(g: &MemGraph, node: &Term) -> Vec<Target> {
 
 fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
     let mut out = Vec::new();
+
+    // sh:class is special (§7.1.1): plain/repeated values are conjuncts (instance of *all*), but a
+    // *list* value is a disjunction (instance of *any*) — represented as a distinct internal
+    // component so dispatch can tell them apart (W3C core/property/class-002).
+    let class_pred = sh("class");
+    let mut plain_classes = Vec::new();
+    for obj in g.objects(node, &class_pred) {
+        match rdf_list(g, &obj) {
+            Some(members) => out.push(Constraint {
+                component: sh("ClassListConstraintComponent"),
+                params: members
+                    .into_iter()
+                    .map(|m| (class_pred.clone(), m))
+                    .collect(),
+                severity: None,
+                deactivated: false,
+            }),
+            None => plain_classes.push(obj),
+        }
+    }
+    if !plain_classes.is_empty() {
+        out.push(Constraint {
+            component: sh("ClassConstraintComponent"),
+            params: plain_classes
+                .into_iter()
+                .map(|m| (class_pred.clone(), m))
+                .collect(),
+            severity: None,
+            deactivated: false,
+        });
+    }
+
     for (primary, component, secondary) in COMPONENTS {
+        if *primary == "class" {
+            continue; // handled specially above
+        }
         let primary_pred = sh(primary);
         // Presence is by predicate, not flattened values: an empty list param (e.g. `sh:in ()`,
         // `sh:xone ()`) is still a declared constraint with defined semantics.

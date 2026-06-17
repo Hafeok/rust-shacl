@@ -70,6 +70,36 @@ impl<G: RdfGraph> Validator<G> for ClassValidator {
     }
 }
 
+/// `sh:ClassConstraintComponent` built from a **list** value of `sh:class` (1.2): a value node must
+/// be a SHACL instance of **at least one** listed class (disjunction), unlike repeated `sh:class`
+/// triples which are conjunctive. The result still reports `sh:ClassConstraintComponent`.
+pub struct ClassListValidator {
+    /// The admitted classes (any-of).
+    pub classes: Vec<NamedNode>,
+}
+
+impl<G: RdfGraph> Validator<G> for ClassListValidator {
+    fn component_iri(&self) -> NamedNodeRef<'static> {
+        NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#ClassConstraintComponent")
+    }
+
+    fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
+        for v in value_nodes {
+            let ok = self
+                .classes
+                .iter()
+                .any(|c| crate::constraints::helpers::is_shacl_instance(ctx.graph, v, c));
+            if !ok {
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("ClassConstraintComponent"),
+                ));
+            }
+        }
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CMP-ROOTCLASS — sh:rootClass (§7.9.4, new in 1.2).
 // ─────────────────────────────────────────────────────────────────────────────

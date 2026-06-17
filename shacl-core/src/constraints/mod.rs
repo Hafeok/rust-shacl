@@ -84,6 +84,15 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .into_iter()
             .map(|class| Box::new(value_type::ClassValidator { class }) as Box<dyn Validator<G>>)
             .collect(),
+        // Disjunctive sh:class list (1.2): instance-of-any (ingestion-internal component IRI).
+        "ClassListConstraintComponent" => {
+            let classes = param_iris(c, "class");
+            if classes.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(value_type::ClassListValidator { classes }) as Box<dyn Validator<G>>]
+            }
+        }
         // §7.1.2 — sh:datatype. One IRI, or a 1.2 list (disjunction) → one validator over the set.
         "DatatypeConstraintComponent" => {
             let datatypes = param_iris(c, "datatype");
