@@ -76,10 +76,15 @@ recursion-bearing ones gated behind the SCC guard (9b).
   `sh:qualifiedValueShapesDisjoint`, `sh:rootClass`, `sh:uniqueValuesFor` (under-specified / RDF-1.2
   reification — see known gaps).
 
-### Phase 10 — ingestion (unblocks real fixtures)
-Turtle → `Shape` (`oxttl` rdf-12, REQ-ING-*); ill-formedness detection (REQ-ING-3/4/5);
-`sh:message` → `sh:resultMessage` (REQ-ING-9); then `sh:targetWhere` (REQ-TGT-5) + explicit
-`sh:shape` data targets (REQ-TGT-6).
+### Phase 10 — ingestion (unblocks real fixtures) — ✅ core done
+✅ `shacl-oxigraph::ingest`: `parse_shapes`/`parse_data` (Turtle 1.2 via `oxttl` → `MemGraph` →
+shapes). Shape detection (sh:path / target / param / NodeShape-PropertyShape type), constraint
+grouping by component (with secondary params: flags, ignoredProperties, qualifiedValueShape),
+list-param flattening, all-seven-kinds `sh:path` parsing, targets, severity, deactivation. 6
+end-to-end tests in `shacl-oxigraph/tests/ingest.rs`.
+⬜ Remaining: `sh:message` → `sh:resultMessage` (REQ-ING-9, needs a messages field on Constraint);
+explicit ill-formedness *diagnostics* (REQ-ING-3/4/5 — currently ill-formed params are silently
+skipped, not flagged); `sh:targetWhere` (REQ-TGT-5) + explicit `sh:shape` data targets (REQ-TGT-6).
 
 ### Phase 11 — SHACL-SPARQL (§8, L2)
 `oxigraph::Store` `SparqlGraph` adapter → prefixes → SPARQL constraints (`sh:sparql`) → SPARQL
