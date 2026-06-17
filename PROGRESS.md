@@ -60,8 +60,10 @@ recursion-bearing ones gated behind the SCC guard (9b).
   `sh:uniqueValuesFor` are under-specified in the 1.2 draft → deferred, tracked under known gaps.
 
 ### Phase 9 — cross-cutting infra (interleave, not strictly after 8)
-- **9a. Report RDF serialization** (finishes step 5) — `ValidationReport → Turtle` (REQ-RPT-2/3).
-  Do early: the testsuite runner diffs serialized output.
+- **9a. Report RDF serialization** (finishes step 5) — ✅ `ValidationReport::to_ntriples()`
+  (REQ-RPT-2/3): report + result blank nodes, `sh:conforms`, all §6.7.2 result fields.
+  `sh:resultPath` emitted for predicate paths; compound paths skipped (documented gap, need RDF
+  blank-node path structure). 3 unit tests in `report.rs`.
 - **9b. Recursion / cycle guard** (ADR-002, §9.1) — Tarjan SCC over the shape-ref graph. **Hard gate**
   before 8d's `sh:memberShape` and all of 9c.
 - **9c. Shape-logic + shape-ref (§7.7–7.8)** — `sh:not/and/or/xone`, `sh:node/property/someValue/
