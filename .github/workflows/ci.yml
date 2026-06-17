@@ -34,3 +34,10 @@ jobs:
               print("SDP VIOLATION (ADR-011):",bad); raise SystemExit(1)
           print("SDP OK:",{c:round(I[c],2) for c in cs})
           PY
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Supply-chain gate: advisories, licenses, bans, sources (see deny.toml).
+      - uses: EmbarkStudios/cargo-deny-action@v2
