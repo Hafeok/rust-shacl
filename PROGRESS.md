@@ -3,6 +3,9 @@
 Tracking implementation of `shacl-rs-functional-spec.md`. Build order per spec §11.5; each step
 should have green tests before the next. Status legend: ✅ done · 🟡 in progress · ⬜ not started.
 
+> **Conformance remediation plan** (closing the last 40 W3C 1.2 core failures, 101→141) lives at the
+> bottom of this file under **"Conformance remediation plan"**.
+
 ## Environment / setup — ✅ COMPLETE (workspace builds, `cargo test --workspace` green, clippy clean)
 - ✅ Unpacked scaffold tarball, cleaned Windows `:Zone.Identifier` artifacts (gitignored).
 - ✅ Fixed dependency pins: `oxrdf 0.3` / `oxttl 0.2` (independently versioned from `oxigraph 0.5`),
@@ -142,3 +145,100 @@ well-formedness checks.
   insertion order; report comparison is graph-isomorphic anyway (REQ-TS-2).
 </content>
 </invoke>
+
+---
+
+## Conformance remediation plan (last 40 W3C 1.2 core failures: 101 → 141)
+
+Each of the 40 failures was triaged against the live `w3c/data-shapes` `shacl12-test-suite/tests/core`
+suite. They group into **runner gaps** (the harness loads the wrong graph), **cheap engine fixes**,
+**medium 1.2 enhancements**, and **larger 1.2 features**. Work the tiers top-down — each tier is
+independently shippable with its own test-count win.
+
+### Tier 1 — runner + cheap fixes (~10 tests, low effort)
+
+- **R1. Multi-file test loading** — *runner*, ~5 clean wins (+ partials). Several tests use
+  `sht:dataGraph <foo-data.ttl>` / `sht:shapesGraph <foo-shapes.ttl>` instead of `<>`; the runner
+  currently loads the manifest doc as both. Fix `shacl-testsuite`: read `mf:action`'s
+  `sht:dataGraph`/`sht:shapesGraph`, resolve relative refs against the test file's dir, and load the
+  referenced files (falling back to the doc itself for `<>`). Unblocks `xone-duplicate`,
+  `path/path-unused-001`, `path/path-complex-002`, `node/qualified-001`, `validation-reports/shared`
+  (and is a prerequisite for `datatype-ill-formed`, `targets/shape-001`).
+- **R2. Severity `sh:Trace`/`sh:Debug` don't break conformance** — *1-line*, 2 tests
+  (`misc/severity-004/005`). `sh:conforms` is "no result with severity ≥ `sh:Info`"; `Trace`/`Debug`
+  are diagnostic-only. Refine `ValidationReport::conforms()` from `results.is_empty()` to
+  `!results.iter().any(|r| sev ∈ {Info, Warning, Violation})`. (Keeps `severity-001` passing.)
+- **R3. `sh:singleLine` whitespace set** — *small*, 1 test (`property/singleLine-001`). Broaden the
+  rejected chars beyond `\n`/`\r` to all Unicode line breaks: `\n \r \f      `.
+- **R4. Derived-integer range in `sh:datatype`** — *small*, contributes to `datatype-ill-formed`
+  (with R1). `"300"^^xsd:byte` is ill-formed (out of range). Replace the "validate derived ints as
+  `xsd:integer`" shortcut in `value_type::lexical_valid` with per-type `oxsdatatypes` parsers
+  (`Byte`, `Short`, `Int`, `UnsignedByte`, …) so range bounds are enforced.
+
+### Tier 2 — medium 1.2 enhancements (~12 tests)
+
+- **M1. List-valued value-type params** — 4 tests (`node/datatype-003`, `property/datatype-004`,
+  `node/nodeKind-002`, `property/class-002`). In 1.2 `sh:class`/`sh:datatype`/`sh:nodeKind` may take
+  an `rdf:List`: `sh:class` = conjunction (instance of **all**), `sh:datatype`/`sh:nodeKind` =
+  disjunction (**any** of). Mark these three primary params list-valued in `ingest::LIST_PARAMS`,
+  and add disjunctive `Datatype`/`NodeKind` validators (one validator over a set) while keeping
+  `sh:class` repeats as independent conjuncts.
+- **M2. Path-valued property-pair constraints** — 6 tests (`property/equals-002`, `disjoint-002`,
+  `subsetOf-002`, `lessThan-002/003`, `lessThanOrEquals-002`). In 1.2 `sh:equals`/`disjoint`/
+  `subsetOf`/`lessThan`/`lessThanOrEquals` take a **path** (often a sequence list) rather than only a
+  predicate IRI. Change the pair validators to hold a `Path` and compute the "other" value set via
+  `reach(graph, focus, &path)`; teach ingestion to parse the pair param as a path (reuse
+  `parse_path`). Predicate-only cases keep working (a bare IRI is a `Path::Predicate`).
+- **M3. `sh:uniqueLang` with base direction** — 1 test (`property/uniqueLang-003`). RDF-1.2
+  directional literals (`"x"@ar--ltr`) make the uniqueness key **(language, direction)**, not language
+  alone. Include the literal's direction in `UniqueLangValidator`'s key (oxrdf `Literal` direction API).
+- **M4. Implicit `sh:ShapeClass` targets** — 1–2 tests (`targets/targetClassImplicit-002`, partial
+  `node/in-002`). Treat a shape typed `sh:ShapeClass` (not only `rdfs:Class`) as an implicit class
+  target, and ensure subclass instances are picked up via the existing `is_shacl_instance` walk.
+
+### Tier 3 — larger 1.2 features (~12 tests)
+
+- **L1. `sh:closed sh:ByTypes`** — 2 tests (`node/closed-003/004`). New 1.2 closure variant: the
+  permitted predicate set is computed per `rdf:type` of the focus (each type's own + inherited
+  property shapes) rather than globally. Extend `other::ClosedValidator` to accept the `sh:ByTypes`
+  IRI value and resolve allowed predicates per the focus node's types.
+- **L2. `sh:qualifiedValueShapesDisjoint`** — 2 tests (`property/qualifiedValueShapesDisjoint-001`,
+  `qualifiedMinCountDisjoint-001`). When `true`, a value node only counts toward the qualified count
+  if it conforms to **no sibling** `sh:qualifiedValueShape`. Thread sibling qualified shapes into
+  `QualifiedValidator` and subtract them.
+- **L3. `sh:uniqueValuesFor`** — 3 tests (`node/uniqueValuesFor-001/002/003`). Property-level
+  cross-focus uniqueness: a value reached via the path must be unique across the focus nodes sharing
+  the given property. Needs a value→focus index built over the target set.
+- **L4. `sh:someValue` + `sh:rootClass`** — 2 tests (`property/someValue-001`, `property/rootClass-001`).
+  `sh:someValue`: at least one value node conforms to the referenced shape (else one result).
+  `sh:rootClass`: each value node must be an `rdfs:subClassOf*` of the root class. Both are small
+  validators in the `shape`/`value_type` modules once their exact 1.2 semantics are pinned.
+- **L5. `sh:targetWhere` + explicit `sh:shape` targets** — 2 tests (`targets/targetWhere-001`,
+  `targets/shape-001`). `sh:targetWhere` (REQ-TGT-5, ADR-007): naive iteration — a node is a focus if
+  it conforms to the inner shape. Explicit `sh:shape` (REQ-TGT-6): read `(node, sh:shape, thisShape)`
+  links from the **data** graph. Both need the shape registry already on `Ctx`.
+
+### Tier 4 — RDF-1.2 reification & node expressions (~7 tests)
+
+- **X1. Reifier annotations + `sh:reifierShape`/`sh:reificationRequired`** — 3 tests
+  (`misc/deactivated-003`, `property/reifierShape-001/002`). Parse RDF-1.2 reifier annotation syntax
+  (`{| sh:deactivated true |}`) in ingestion into per-constraint reifier metadata, and add the
+  `sh:reifierShape` family (validate the reifying triple-term against a shape). Largest parser change.
+- **X2. `sh:nodeByExpression` / SHACL node expressions** — 1 test (`node/nodeByExpression-001`).
+  Core node-expression evaluation (at minimum the IRI-expression form). A self-contained sub-feature;
+  schedule last.
+- **X3. `shsh:` shapes-graph well-formedness** — 2 tests (`node/in-003`,
+  `validation-reports/conformance-disallows-001`). These validate the *shapes graph itself* against
+  the SHACL-SHACL metashapes; needs the `shsh:` vocabulary prefix + metashape validation pass.
+- **X4. Stragglers** — `node/in-002` (empty `sh:in` + implicit-class targeting interaction) — revisit
+  after M4; may resolve or need a targeted fix.
+
+### Sequencing & expected yield
+1. **Tier 1** (R1–R4): ~10 tests, ~half a day. R1 (runner) first — it also exposes the true failure
+   reason for the separate-file tests behind it.
+2. **Tier 2** (M1–M4): ~12 tests. M1/M2 are the biggest single wins.
+3. **Tier 3** (L1–L5): ~12 tests, one feature at a time.
+4. **Tier 4** (X1–X4): ~7 tests; X1 (reification) is the heaviest and lowest-yield-per-effort — do last.
+
+After each workstream: re-run `cargo run -p shacl-testsuite -- <suite>/tests/core`, add any newly-green
+tests to the vendored `shacl-testsuite/tests/fixtures/` offline gate, and `cargo fmt`/`clippy`/commit.
