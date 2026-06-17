@@ -43,10 +43,12 @@ recursion-bearing ones gated behind the SCC guard (9b).
 - **8a. Cardinality (§7.2)** — ✅ `CMP-MINCOUNT` + `CMP-MAXCOUNT`. Results carry no `sh:value`
   (violation is the count). Hoisted shared `comp`/`result_for` helpers into `constraints/mod.rs`;
   added `param_int`. 6 tests in `shacl-oxigraph/tests/cardinality.rs` (boundary + distinct-count).
-- **8b. String, set membership, range (no recursion)** — `CMP-LENGTH-*` (§7.4), `CMP-PATTERN` /
-  `CMP-SINGLELINE` (fancy-regex, ADR-005), `CMP-LANGUAGEIN` / `CMP-UNIQUELANG`, `CMP-HASVALUE` /
-  `CMP-IN` (§7.9). Range `CMP-RANGE-*` (§7.3) needs one shared `oxsdatatypes` ordered comparator —
-  this also closes the logged derived-integer range-bound gap.
+- **8b. String, set membership, range (no recursion)** — ✅ `CMP-LENGTH-*`, `CMP-PATTERN`
+  (fancy-regex, ADR-005), `CMP-SINGLELINE`, `CMP-LANGUAGEIN`, `CMP-UNIQUELANG` (§7.4); `CMP-HASVALUE`
+  / `CMP-IN` (§7.9); `CMP-RANGE-*` (§7.3) with a shared numeric/dateTime comparator. List-valued
+  params (`sh:in`/`sh:languageIn`) adopt the repeated-`(pred, element)` representation that
+  ingestion will flatten into. Added `param_term`/`param_terms`/`param_bool`. 11 tests in
+  `shacl-oxigraph/tests/string_range_membership.rs`.
 - **8c. Property-pair (§7.6)** — `sh:equals/disjoint/subsetOf/lessThan/lessThanOrEquals`; second
   path eval against the focus (reuse `reach`).
 - **8d. List (§7.5, new in 1.2)** — `rdf:List` walker; `sh:minListLength/maxListLength/uniqueMembers`

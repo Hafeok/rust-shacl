@@ -7,14 +7,14 @@
 
 pub mod cardinality; // §7.2 — CMP-MINCOUNT (worked in spec), CMP-MAXCOUNT
 pub mod helpers;
+pub mod membership; // §7.9 — CMP-HASVALUE, CMP-IN
+pub mod range; // §7.3 — CMP-RANGE-*
+pub mod string; // §7.4 — CMP-LENGTH-*, CMP-PATTERN, CMP-SINGLELINE, CMP-LANGUAGEIN, CMP-UNIQUELANG
 pub mod value_type; // §7.1 — CMP-NODEKIND, CMP-CLASS, CMP-DATATYPE
-                    // pub mod range;   // §7.3
-                    // pub mod string;  // §7.4 — CMP-PATTERN (worked in spec)
                     // pub mod pair;    // §7.6
                     // pub mod logical; // §7.7 — needs recursion guard (ADR-002) before enabling
                     // pub mod shape;   // §7.8
                     // pub mod list;    // §7.5
-                    // pub mod other;   // §7.9
 
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
@@ -92,8 +92,97 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .map(|max| Box::new(cardinality::MaxCountValidator { max }) as Box<dyn Validator<G>>)
             .into_iter()
             .collect(),
+
+        // §7.3 — value range. Exactly one threshold literal each.
+        "MinExclusiveConstraintComponent" => {
+            range_validator(c, range::Bound::MinExclusive, "minExclusive")
+        }
+        "MinInclusiveConstraintComponent" => {
+            range_validator(c, range::Bound::MinInclusive, "minInclusive")
+        }
+        "MaxExclusiveConstraintComponent" => {
+            range_validator(c, range::Bound::MaxExclusive, "maxExclusive")
+        }
+        "MaxInclusiveConstraintComponent" => {
+            range_validator(c, range::Bound::MaxInclusive, "maxInclusive")
+        }
+
+        // §7.4 — string components.
+        "MinLengthConstraintComponent" => param_int(c, "minLength")
+            .map(|min| Box::new(string::MinLengthValidator { min }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+        "MaxLengthConstraintComponent" => param_int(c, "maxLength")
+            .map(|max| Box::new(string::MaxLengthValidator { max }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+        // sh:pattern (+ optional sh:flags). REQ-PATTERN-4: >1 pattern/flags is ill-formed — we take
+        // the first of each.
+        "PatternConstraintComponent" => match param_term(c, "pattern") {
+            Some(Term::Literal(p)) => {
+                let flags = match param_term(c, "flags") {
+                    Some(Term::Literal(f)) => Some(f.value().to_string()),
+                    _ => None,
+                };
+                vec![
+                    Box::new(string::PatternValidator::new(p.value(), flags.as_deref()))
+                        as Box<dyn Validator<G>>,
+                ]
+            }
+            _ => Vec::new(),
+        },
+        "SingleLineConstraintComponent" => match param_bool(c, "singleLine") {
+            Some(true) => vec![Box::new(string::SingleLineValidator) as Box<dyn Validator<G>>],
+            _ => Vec::new(),
+        },
+        "LanguageInConstraintComponent" => {
+            let ranges: Vec<String> = param_terms(c, "languageIn")
+                .into_iter()
+                .filter_map(|t| match t {
+                    Term::Literal(l) => Some(l.value().to_ascii_lowercase()),
+                    _ => None,
+                })
+                .collect();
+            if ranges.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(string::LanguageInValidator { ranges }) as Box<dyn Validator<G>>]
+            }
+        }
+        "UniqueLangConstraintComponent" => match param_bool(c, "uniqueLang") {
+            Some(true) => vec![Box::new(string::UniqueLangValidator) as Box<dyn Validator<G>>],
+            _ => Vec::new(),
+        },
+
+        // §7.9 — value membership.
+        "HasValueConstraintComponent" => param_term(c, "hasValue")
+            .map(|value| Box::new(membership::HasValueValidator { value }) as Box<dyn Validator<G>>)
+            .into_iter()
+            .collect(),
+        "InConstraintComponent" => {
+            let members = param_terms(c, "in");
+            if members.is_empty() {
+                Vec::new()
+            } else {
+                vec![Box::new(membership::InValidator { members }) as Box<dyn Validator<G>>]
+            }
+        }
+
         _ => Vec::new(),
     }
+}
+
+/// Build a single [`range::RangeValidator`] for one of the four `sh:*Inclusive`/`sh:*Exclusive`
+/// components, reading its single threshold literal from `sh:<local>`.
+fn range_validator<G: RdfGraph>(
+    c: &Constraint,
+    bound: range::Bound,
+    local: &str,
+) -> Vec<Box<dyn Validator<G>>> {
+    param_term(c, local)
+        .map(|limit| Box::new(range::RangeValidator { bound, limit }) as Box<dyn Validator<G>>)
+        .into_iter()
+        .collect()
 }
 
 /// The IRI values bound to parameter `sh:<local>` on a constraint, in declaration order.
@@ -113,12 +202,45 @@ fn param_iris(c: &Constraint, local: &str) -> Vec<NamedNode> {
 /// literal lexical form. Single-valued integer parameters are exactly-one per shape (`REQ-ING-5`);
 /// a missing or non-integer value yields `None`, so the component is silently skipped.
 fn param_int(c: &Constraint, local: &str) -> Option<i64> {
+    match param_term(c, local) {
+        Some(Term::Literal(lit)) => lit.value().parse::<i64>().ok(),
+        _ => None,
+    }
+}
+
+/// The first value (of any term kind) bound to parameter `sh:<local>`, in declaration order.
+/// Used for single-valued parameters whose value is an arbitrary term (e.g. `sh:hasValue`,
+/// `sh:minInclusive`).
+fn param_term(c: &Constraint, local: &str) -> Option<Term> {
     let pred = format!("{SH}{local}");
     c.params
         .iter()
         .find(|(p, _)| p.as_str() == pred)
-        .and_then(|(_, v)| match v {
-            Term::Literal(lit) => lit.value().parse::<i64>().ok(),
+        .map(|(_, v)| v.clone())
+}
+
+/// All values bound to parameter `sh:<local>`, in declaration order. List-valued parameters
+/// (`sh:in`, `sh:languageIn`, `sh:and`/`sh:or`/`sh:xone`, `sh:ignoredProperties`) are represented
+/// as **repeated** `(predicate, element)` pairs in list order — ingestion (Phase 10) flattens the
+/// `rdf:List` into this shape, exactly as it does for repeated single-valued params like `sh:class`.
+fn param_terms(c: &Constraint, local: &str) -> Vec<Term> {
+    let pred = format!("{SH}{local}");
+    c.params
+        .iter()
+        .filter(|(p, _)| p.as_str() == pred)
+        .map(|(_, v)| v.clone())
+        .collect()
+}
+
+/// The first boolean value bound to parameter `sh:<local>` (e.g. `sh:uniqueLang`, `sh:singleLine`),
+/// read from an `xsd:boolean` literal (`"true"`/`"false"`, or `"1"`/`"0"`).
+fn param_bool(c: &Constraint, local: &str) -> Option<bool> {
+    match param_term(c, local) {
+        Some(Term::Literal(lit)) => match lit.value() {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
             _ => None,
-        })
+        },
+        _ => None,
+    }
 }
