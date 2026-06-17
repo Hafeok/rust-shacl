@@ -122,7 +122,9 @@ fn as_f64(s: &str) -> Option<f64> {
 /// with a documented precision caveat for very large `xsd:decimal`s). `xsd:dateTime` values compare
 /// via `oxsdatatypes` (which may itself return `None` for timezone-indeterminate pairs). Equal
 /// string-typed literals compare lexically. Everything else is incomparable.
-fn compare(value: &Term, bound: &Term) -> Option<Ordering> {
+///
+/// Shared with the property-pair components (`sh:lessThan`/`sh:lessThanOrEquals`, §7.6).
+pub(crate) fn compare(value: &Term, bound: &Term) -> Option<Ordering> {
     let (Term::Literal(a), Term::Literal(b)) = (value, bound) else {
         return None;
     };

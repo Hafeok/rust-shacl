@@ -8,12 +8,12 @@
 pub mod cardinality; // §7.2 — CMP-MINCOUNT (worked in spec), CMP-MAXCOUNT
 pub mod helpers;
 pub mod membership; // §7.9 — CMP-HASVALUE, CMP-IN
+pub mod pair; // §7.6 — CMP-PAIR-*, CMP-SUBSETOF
 pub mod range; // §7.3 — CMP-RANGE-*
 pub mod string; // §7.4 — CMP-LENGTH-*, CMP-PATTERN, CMP-SINGLELINE, CMP-LANGUAGEIN, CMP-UNIQUELANG
 pub mod value_type; // §7.1 — CMP-NODEKIND, CMP-CLASS, CMP-DATATYPE
-                    // pub mod pair;    // §7.6
                     // pub mod logical; // §7.7 — needs recursion guard (ADR-002) before enabling
-                    // pub mod shape;   // §7.8
+                    // pub mod shape;   // §7.8 — needs recursion guard + shape registry
                     // pub mod list;    // §7.5
 
 use crate::graph::RdfGraph;
@@ -167,6 +167,42 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
                 vec![Box::new(membership::InValidator { members }) as Box<dyn Validator<G>>]
             }
         }
+
+        // §7.6 — property pair (each takes one predicate IRI; property shapes only).
+        "EqualsConstraintComponent" => param_iris(c, "equals")
+            .into_iter()
+            .map(|predicate| Box::new(pair::EqualsValidator { predicate }) as Box<dyn Validator<G>>)
+            .collect(),
+        "DisjointConstraintComponent" => param_iris(c, "disjoint")
+            .into_iter()
+            .map(|predicate| {
+                Box::new(pair::DisjointValidator { predicate }) as Box<dyn Validator<G>>
+            })
+            .collect(),
+        "SubsetOfConstraintComponent" => param_iris(c, "subsetOf")
+            .into_iter()
+            .map(|predicate| {
+                Box::new(pair::SubsetOfValidator { predicate }) as Box<dyn Validator<G>>
+            })
+            .collect(),
+        "LessThanConstraintComponent" => param_iris(c, "lessThan")
+            .into_iter()
+            .map(|predicate| {
+                Box::new(pair::LessThanValidator {
+                    predicate,
+                    or_equals: false,
+                }) as Box<dyn Validator<G>>
+            })
+            .collect(),
+        "LessThanOrEqualsConstraintComponent" => param_iris(c, "lessThanOrEquals")
+            .into_iter()
+            .map(|predicate| {
+                Box::new(pair::LessThanValidator {
+                    predicate,
+                    or_equals: true,
+                }) as Box<dyn Validator<G>>
+            })
+            .collect(),
 
         _ => Vec::new(),
     }

@@ -49,8 +49,9 @@ recursion-bearing ones gated behind the SCC guard (9b).
   params (`sh:in`/`sh:languageIn`) adopt the repeated-`(pred, element)` representation that
   ingestion will flatten into. Added `param_term`/`param_terms`/`param_bool`. 11 tests in
   `shacl-oxigraph/tests/string_range_membership.rs`.
-- **8c. Property-pair (§7.6)** — `sh:equals/disjoint/subsetOf/lessThan/lessThanOrEquals`; second
-  path eval against the focus (reuse `reach`).
+- **8c. Property-pair (§7.6)** — ✅ `sh:equals` (symmetric diff), `sh:disjoint`, `sh:subsetOf`,
+  `sh:lessThan`/`sh:lessThanOrEquals` (reuse `range::compare`). Paired values = objects of
+  `(focus, predicate, *)`. 5 tests in `shacl-oxigraph/tests/pair.rs`.
 - **8d. List (§7.5, new in 1.2)** — `rdf:List` walker; `sh:minListLength/maxListLength/uniqueMembers`
   no-recursion; `sh:memberShape` recurses → gate behind 9b.
 - **8e. `sh:closed`/`sh:rootClass`/`sh:uniqueValuesFor` (§7.9)** — node-level property-set checks.
