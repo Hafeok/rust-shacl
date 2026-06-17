@@ -308,8 +308,10 @@ fn sibling_qualified_shapes<G: RdfGraph>(ctx: &Ctx<'_, G>, me: &ShapeId) -> Vec<
 
 // ── sh:memberShape (§7.5.1) ─────────────────────────────────────────────────────────────────────
 
-/// `sh:MemberShapeConstraintComponent`. Every member of each value node's `rdf:List` must conform to
-/// the referenced shape; one result per non-conforming member (`sh:value` = the member).
+/// `sh:MemberShapeConstraintComponent`. Each value node must be a well-formed `rdf:List` all of whose
+/// members conform to the referenced shape; otherwise **one** result per value node (`sh:value` = the
+/// list node). A malformed or cyclic list also violates (the member details ride along as `sh:detail`
+/// in the spec; we report the summarising result).
 pub struct MemberShapeValidator {
     /// The shape each list member must conform to.
     pub shape: ShapeId,
@@ -321,17 +323,16 @@ impl<G: RdfGraph> Validator<G> for MemberShapeValidator {
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
         for v in value_nodes {
-            let Some(members) = super::list::rdf_list(ctx.graph, v) else {
-                continue; // not a well-formed list: a CMP-LISTLEN concern, not this one.
+            let ok = match super::list::rdf_list(ctx.graph, v) {
+                Some(members) => members.iter().all(|m| value_conforms(ctx, &self.shape, m)),
+                None => false, // not a well-formed list (missing cells, or cyclic)
             };
-            for m in members {
-                if !value_conforms(ctx, &self.shape, &m) {
-                    out.push(result_for(
-                        ctx,
-                        Some(m),
-                        comp("MemberShapeConstraintComponent"),
-                    ));
-                }
+            if !ok {
+                out.push(result_for(
+                    ctx,
+                    Some(v.clone()),
+                    comp("MemberShapeConstraintComponent"),
+                ));
             }
         }
     }
