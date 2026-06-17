@@ -180,7 +180,12 @@ for severity-004/005 + singleLine-001; `derived_integer_ranges_enforced` unit te
   `xsd:integer`" shortcut in `value_type::lexical_valid` with per-type `oxsdatatypes` parsers
   (`Byte`, `Short`, `Int`, `UnsignedByte`, …) so range bounds are enforced.
 
-### Tier 2 — medium 1.2 enhancements (~12 tests)
+### Tier 2 — medium 1.2 enhancements — ✅ DONE (109 → 121)
+**M1** list-valued datatype/nodeKind disjunction (+3; `sh:class` list left as a gap), **M2**
+path-valued pair constraints + per-pair `lessThan` results (+6), **M3** `sh:uniqueLang` direction +
+`param_bool` "true"-only (+2), **M4** implicit `sh:ShapeClass` targets (+1).
+
+#### Original notes (kept for reference)
 
 - **M1. List-valued value-type params** — 4 tests (`node/datatype-003`, `property/datatype-004`,
   `node/nodeKind-002`, `property/class-002`). In 1.2 `sh:class`/`sh:datatype`/`sh:nodeKind` may take
