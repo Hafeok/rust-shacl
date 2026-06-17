@@ -3,29 +3,30 @@
 //! `sh:equals` (§7.6.1), `sh:disjoint` (§7.6.2), `sh:subsetOf` (§7.6.3, new in 1.2),
 //! `sh:lessThan` (§7.6.4), `sh:lessThanOrEquals` (§7.6.5).
 //!
-//! The "other" values are the objects of `(focus, predicate, *)` in the data graph.
+//! The "other" values are reached from the focus node along the paired **path** (a predicate or, in
+//! 1.2, a sequence of predicates), evaluated over the data graph via [`crate::path::reach`].
 
 use super::range::compare;
 use super::{comp, result_for};
 use crate::graph::RdfGraph;
+use crate::path::reach;
 use crate::report::ValidationResult;
 use crate::validator::{Ctx, Validator};
-use shacl_model::term::{NamedNode, NamedNodeRef, Term};
+use shacl_model::path::Path;
+use shacl_model::term::{NamedNodeRef, Term};
 use std::cmp::Ordering;
 
-/// The values of `(focus, predicate, *)` — the property paired against the value nodes.
-fn other_values<G: RdfGraph>(ctx: &Ctx<'_, G>, predicate: &NamedNode) -> Vec<Term> {
-    ctx.graph
-        .objects(ctx.focus, predicate)
-        .into_iter()
-        .collect()
+/// The values reached from the focus along the paired `path` — the property paired against the
+/// value nodes.
+fn other_values<G: RdfGraph>(ctx: &Ctx<'_, G>, path: &Path) -> Vec<Term> {
+    reach(ctx.graph, ctx.focus, path).into_iter().collect()
 }
 
 /// `sh:EqualsConstraintComponent`. The value-node set must equal the paired property's value set;
 /// one result per term in the symmetric difference (`sh:value` = that term).
 pub struct EqualsValidator {
-    /// The paired predicate.
-    pub predicate: NamedNode,
+    /// The paired property path.
+    pub path: Path,
 }
 
 impl<G: RdfGraph> Validator<G> for EqualsValidator {
@@ -33,7 +34,7 @@ impl<G: RdfGraph> Validator<G> for EqualsValidator {
         NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#EqualsConstraintComponent")
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
-        let other = other_values(ctx, &self.predicate);
+        let other = other_values(ctx, &self.path);
         // V ∖ O, then O ∖ V — each offending term yields one result.
         for v in value_nodes {
             if !other.contains(v) {
@@ -59,8 +60,8 @@ impl<G: RdfGraph> Validator<G> for EqualsValidator {
 /// `sh:DisjointConstraintComponent`. The value nodes and the paired property's values must share no
 /// term; one result per shared term.
 pub struct DisjointValidator {
-    /// The paired predicate.
-    pub predicate: NamedNode,
+    /// The paired property path.
+    pub path: Path,
 }
 
 impl<G: RdfGraph> Validator<G> for DisjointValidator {
@@ -68,7 +69,7 @@ impl<G: RdfGraph> Validator<G> for DisjointValidator {
         NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#DisjointConstraintComponent")
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
-        let other = other_values(ctx, &self.predicate);
+        let other = other_values(ctx, &self.path);
         for v in value_nodes {
             if other.contains(v) {
                 out.push(result_for(
@@ -84,8 +85,8 @@ impl<G: RdfGraph> Validator<G> for DisjointValidator {
 /// `sh:SubsetOfConstraintComponent` (new in 1.2). Every value node must also be a value of the
 /// paired property; one result per value node that is not.
 pub struct SubsetOfValidator {
-    /// The paired predicate (the superset).
-    pub predicate: NamedNode,
+    /// The paired property path (the superset).
+    pub path: Path,
 }
 
 impl<G: RdfGraph> Validator<G> for SubsetOfValidator {
@@ -93,7 +94,7 @@ impl<G: RdfGraph> Validator<G> for SubsetOfValidator {
         NamedNodeRef::new_unchecked("http://www.w3.org/ns/shacl#SubsetOfConstraintComponent")
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
-        let other = other_values(ctx, &self.predicate);
+        let other = other_values(ctx, &self.path);
         for v in value_nodes {
             if !other.contains(v) {
                 out.push(result_for(
@@ -110,8 +111,8 @@ impl<G: RdfGraph> Validator<G> for SubsetOfValidator {
 /// compare strictly-less-than (resp. less-than-or-equal) every value of the paired property. A value
 /// node that fails any pair — including an incomparable (type-error) pair — yields one result.
 pub struct LessThanValidator {
-    /// The paired predicate.
-    pub predicate: NamedNode,
+    /// The paired property path.
+    pub path: Path,
     /// `true` for `sh:lessThanOrEquals`, `false` for `sh:lessThan`.
     pub or_equals: bool,
 }
@@ -127,20 +128,25 @@ impl<G: RdfGraph> Validator<G> for LessThanValidator {
         }
     }
     fn validate(&self, value_nodes: &[Term], ctx: &Ctx<'_, G>, out: &mut Vec<ValidationResult>) {
-        let other = other_values(ctx, &self.predicate);
+        let other = other_values(ctx, &self.path);
         let component = if self.or_equals {
             "LessThanOrEqualsConstraintComponent"
         } else {
             "LessThanConstraintComponent"
         };
+        // One result per failing (value node, paired value) pair (§7.6.4–5), with the value node as
+        // `sh:value`. A pair fails if the value node is not strictly-less-than (resp. ≤) the paired
+        // value, including the incomparable (SPARQL type-error) case.
         for v in value_nodes {
-            let ok = other.iter().all(|o| match compare(v, o) {
-                Some(Ordering::Less) => true,
-                Some(Ordering::Equal) => self.or_equals,
-                _ => false, // Greater, or incomparable (type error) → fails.
-            });
-            if !ok {
-                out.push(result_for(ctx, Some(v.clone()), comp(component)));
+            for o in &other {
+                let ok = match compare(v, o) {
+                    Some(Ordering::Less) => true,
+                    Some(Ordering::Equal) => self.or_equals,
+                    _ => false,
+                };
+                if !ok {
+                    out.push(result_for(ctx, Some(v.clone()), comp(component)));
+                }
             }
         }
     }

@@ -20,6 +20,7 @@ use crate::engine::term_to_shape_id;
 use crate::graph::RdfGraph;
 use crate::report::ValidationResult;
 use crate::validator::{Ctx, Validator};
+use shacl_model::path::Path;
 use shacl_model::shape::{Constraint, ShapeId};
 use shacl_model::term::{NamedNode, NodeKind, Term};
 
@@ -172,40 +173,37 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             vec![Box::new(membership::InValidator { members }) as Box<dyn Validator<G>>]
         }
 
-        // §7.6 — property pair (each takes one predicate IRI; property shapes only).
-        "EqualsConstraintComponent" => param_iris(c, "equals")
+        // §7.6 — property pair. The paired value is a path: a predicate IRI (1.0) or, in 1.2, a
+        // sequence given as an `rdf:List` of predicates (flattened to ordered params by ingestion).
+        "EqualsConstraintComponent" => pair_path(c, "equals")
+            .map(|path| Box::new(pair::EqualsValidator { path }) as Box<dyn Validator<G>>)
             .into_iter()
-            .map(|predicate| Box::new(pair::EqualsValidator { predicate }) as Box<dyn Validator<G>>)
             .collect(),
-        "DisjointConstraintComponent" => param_iris(c, "disjoint")
+        "DisjointConstraintComponent" => pair_path(c, "disjoint")
+            .map(|path| Box::new(pair::DisjointValidator { path }) as Box<dyn Validator<G>>)
             .into_iter()
-            .map(|predicate| {
-                Box::new(pair::DisjointValidator { predicate }) as Box<dyn Validator<G>>
-            })
             .collect(),
-        "SubsetOfConstraintComponent" => param_iris(c, "subsetOf")
+        "SubsetOfConstraintComponent" => pair_path(c, "subsetOf")
+            .map(|path| Box::new(pair::SubsetOfValidator { path }) as Box<dyn Validator<G>>)
             .into_iter()
-            .map(|predicate| {
-                Box::new(pair::SubsetOfValidator { predicate }) as Box<dyn Validator<G>>
-            })
             .collect(),
-        "LessThanConstraintComponent" => param_iris(c, "lessThan")
-            .into_iter()
-            .map(|predicate| {
+        "LessThanConstraintComponent" => pair_path(c, "lessThan")
+            .map(|path| {
                 Box::new(pair::LessThanValidator {
-                    predicate,
+                    path,
                     or_equals: false,
                 }) as Box<dyn Validator<G>>
             })
-            .collect(),
-        "LessThanOrEqualsConstraintComponent" => param_iris(c, "lessThanOrEquals")
             .into_iter()
-            .map(|predicate| {
+            .collect(),
+        "LessThanOrEqualsConstraintComponent" => pair_path(c, "lessThanOrEquals")
+            .map(|path| {
                 Box::new(pair::LessThanValidator {
-                    predicate,
+                    path,
                     or_equals: true,
                 }) as Box<dyn Validator<G>>
             })
+            .into_iter()
             .collect(),
 
         // §7.5 — rdf:List components (sh:memberShape waits for the recursion guard, 9b).
@@ -377,6 +375,19 @@ fn param_bool(c: &Constraint, local: &str) -> Option<bool> {
             _ => None,
         },
         _ => None,
+    }
+}
+
+/// The property-pair path bound to `sh:<local>`: a single predicate (`Path::Predicate`) or, when the
+/// value was a 1.2 `rdf:List` of predicates (flattened to ordered params by ingestion), a
+/// `Path::Sequence`. Returns `None` if no predicate is present. (Inverse/alternative pair paths are
+/// not represented by this ordered-predicate encoding — a documented limitation.)
+fn pair_path(c: &Constraint, local: &str) -> Option<Path> {
+    let mut preds = param_iris(c, local).into_iter().map(Path::Predicate);
+    match preds.len() {
+        0 => None,
+        1 => preds.next(),
+        _ => Some(Path::Sequence(preds.collect())),
     }
 }
 

@@ -94,7 +94,16 @@ const LIST_PARAMS: &[&str] = &["in", "languageIn", "and", "or", "xone", "ignored
 /// validator). NOTE: `sh:class` is intentionally excluded — a *list* value of `sh:class` is a
 /// disjunction (instance-of-any) whereas *repeated* `sh:class` triples are a conjunction, and the
 /// flat param model cannot tell them apart post-flattening (W3C `core/property/class-002`, a gap).
-const MAYBE_LIST_PARAMS: &[&str] = &["datatype", "nodeKind"];
+const MAYBE_LIST_PARAMS: &[&str] = &[
+    "datatype",
+    "nodeKind",
+    // Property-pair paths (§7.6): a predicate IRI, or a 1.2 sequence given as a predicate list.
+    "equals",
+    "disjoint",
+    "subsetOf",
+    "lessThan",
+    "lessThanOrEquals",
+];
 
 /// Parse a Turtle 1.2 document into its shapes (`REQ-ING-1..10`). Returns the parse error message on
 /// malformed Turtle (`REQ-ING-1` → failure).
