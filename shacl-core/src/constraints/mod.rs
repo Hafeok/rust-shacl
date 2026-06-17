@@ -137,6 +137,7 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             _ => Vec::new(),
         },
         "LanguageInConstraintComponent" => {
+            // An empty sh:languageIn admits no language tag → every value node violates.
             let ranges: Vec<String> = param_terms(c, "languageIn")
                 .into_iter()
                 .filter_map(|t| match t {
@@ -144,11 +145,7 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
                     _ => None,
                 })
                 .collect();
-            if ranges.is_empty() {
-                Vec::new()
-            } else {
-                vec![Box::new(string::LanguageInValidator { ranges }) as Box<dyn Validator<G>>]
-            }
+            vec![Box::new(string::LanguageInValidator { ranges }) as Box<dyn Validator<G>>]
         }
         "UniqueLangConstraintComponent" => match param_bool(c, "uniqueLang") {
             Some(true) => vec![Box::new(string::UniqueLangValidator) as Box<dyn Validator<G>>],
@@ -161,12 +158,9 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
             .into_iter()
             .collect(),
         "InConstraintComponent" => {
+            // An empty sh:in is the empty set → every value node violates.
             let members = param_terms(c, "in");
-            if members.is_empty() {
-                Vec::new()
-            } else {
-                vec![Box::new(membership::InValidator { members }) as Box<dyn Validator<G>>]
-            }
+            vec![Box::new(membership::InValidator { members }) as Box<dyn Validator<G>>]
         }
 
         // §7.6 — property pair (each takes one predicate IRI; property shapes only).
@@ -271,19 +265,15 @@ pub fn dispatch<G: RdfGraph>(c: &Constraint) -> Vec<Box<dyn Validator<G>>> {
     }
 }
 
-/// Build a logical validator over the shape list bound to `sh:<local>` (`sh:and`/`sh:or`/`sh:xone`),
-/// or none when the list is empty/ill-formed.
+/// Build a logical validator over the shape list bound to `sh:<local>` (`sh:and`/`sh:or`/`sh:xone`).
+/// An empty list is kept (not dropped): empty `sh:and` conforms vacuously, empty `sh:or`/`sh:xone`
+/// cannot be satisfied — all defined semantics the validators implement directly.
 fn shape_list<G: RdfGraph, V: Validator<G> + 'static>(
     c: &Constraint,
     local: &str,
     make: impl FnOnce(Vec<ShapeId>) -> V,
 ) -> Vec<Box<dyn Validator<G>>> {
-    let shapes = param_shapes(c, local);
-    if shapes.is_empty() {
-        Vec::new()
-    } else {
-        vec![Box::new(make(shapes)) as Box<dyn Validator<G>>]
-    }
+    vec![Box::new(make(param_shapes(c, local))) as Box<dyn Validator<G>>]
 }
 
 /// Build a `sh:qualifiedValueShape` count validator (`is_min` selects min vs max count).

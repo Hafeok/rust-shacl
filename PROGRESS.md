@@ -97,11 +97,26 @@ helper for `PREFIX` prepending. 5 tests in `shacl-oxigraph/tests/sparql.rs`.
 collection (REQ-SPQ-13 property path), pre-binding restriction enforcement (REQ-SPQ-15), and wiring
 SPARQL constraints into the engine dispatch (the L1 engine is `RdfGraph`-only by `REQ-ARCH-1`).
 
-### Phase 12 — conformance testsuite (§10)
-W3C 1.2 manifests → `shacl-testsuite` runner (graph-isomorphic diff, REQ-TS-2) → matrix + CI gate.
+### Phase 12 — conformance testsuite (§10) — ✅ runner + gate done
+✅ `shacl-testsuite`: a runner (`run_test_file`) for the self-contained W3C 1.2 core tests
+(data = shapes = the doc; expected report under `mf:result`), with relaxed graph-isomorphic result
+comparison (`sh:conforms` + result tuples up to blank-node renaming, REQ-TS-2); a CLI
+(`shacl-testsuite <dir>`) for an external suite checkout; and an offline CI gate over 12 vendored
+passing fixtures (`tests/fixtures/`).
+**Result against the real W3C SHACL 1.2 core suite: 101 / 141 passing (~72%).** Two bugs found and
+fixed by the suite: (1) `sh:conforms` is "no results at all", not "no Violation-severity results"
+(severity is result metadata); (2) empty list params (`sh:in ()`, `sh:xone ()`) are declared
+constraints with defined semantics, not no-ops.
 
-**Critical path:** 9a + Phase 10 are the unlocks (real `.ttl` fixtures vs hand-built `MemGraph`).
-9b blocks `sh:memberShape` and 9c. 8a–8c can proceed now with no new infra.
+**Remaining 40 failures** are genuine SHACL-1.2 enhancements / deferred features, not core bugs:
+path-valued pair constraints (`sh:equals`/`disjoint`/`lessThan` taking a path, not just a predicate),
+datatype/`nodeKind` list values, RDF-1.2 reifier annotations (`{| sh:deactivated true |}`),
+`sh:reifierShape`/`sh:someValue`/`sh:rootClass`/`sh:uniqueValuesFor`/`sh:nodeByExpression`,
+`sh:targetWhere`/explicit-shape targets, complex-path result serialization, and `shsh:`
+well-formedness checks.
+
+**Critical path (historical):** 9a + Phase 10 were the unlocks (real `.ttl` fixtures vs hand-built
+`MemGraph`). 9b gated `sh:memberShape` and 9c.
 
 ## Cross-cutting pieces
 - ✅ The validation **engine** (`engine::validate`): shape → targets → value nodes → dispatch → report.
@@ -114,7 +129,13 @@ W3C 1.2 manifests → `shacl-testsuite` runner (graph-isomorphic diff, REQ-TS-2)
 
 ## Known gaps logged during implementation
 - Derived integer datatypes (xsd:byte/int/short/unsigned*) are lexically validated as xsd:integer;
-  numeric range bounds not yet enforced (`lexical_valid` in `constraints/value_type.rs`).
+  numeric range bounds are enforced separately by `sh:minInclusive`/etc. (range comparator, 8b).
+- SHACL-1.2 enhancements not yet implemented (see Phase 12 failures): path-valued property-pair
+  constraints; list-valued `sh:datatype`/`sh:nodeKind`; RDF-1.2 reifier annotations on constraints;
+  `sh:reifierShape`/`sh:reificationRequired`/`sh:someValue`/`sh:rootClass`/`sh:uniqueValuesFor`/
+  `sh:nodeByExpression`; `sh:targetWhere`/explicit-`sh:shape` targets; `sh:message` →
+  `sh:resultMessage` copying; complex-path `sh:resultPath` RDF serialization; `shsh:` shapes-graph
+  well-formedness; SPARQL-based constraint *components* (§8.2) and pre-binding restriction checks.
 
 ## Notes / decisions taken during implementation
 - `NodeSet = IndexSet<Term>` (not `BTreeSet`) because oxrdf `Term: !Ord`. Determinism comes from

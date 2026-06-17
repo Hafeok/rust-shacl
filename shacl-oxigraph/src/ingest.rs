@@ -92,18 +92,34 @@ const LIST_PARAMS: &[&str] = &["in", "languageIn", "and", "or", "xone", "ignored
 /// Parse a Turtle 1.2 document into its shapes (`REQ-ING-1..10`). Returns the parse error message on
 /// malformed Turtle (`REQ-ING-1` → failure).
 pub fn parse_shapes(turtle: &str) -> Result<Vec<Shape>, String> {
-    let graph = parse_turtle(turtle)?;
+    let graph = parse_turtle(turtle, None)?;
+    Ok(shapes_from_graph(&graph))
+}
+
+/// Like [`parse_shapes`] but resolving relative IRIs against `base` (W3C test files use `<>` and
+/// relative entry IRIs that need a base, §10.1).
+pub fn parse_shapes_with_base(turtle: &str, base: &str) -> Result<Vec<Shape>, String> {
+    let graph = parse_turtle(turtle, Some(base))?;
     Ok(shapes_from_graph(&graph))
 }
 
 /// Parse a Turtle 1.2 document into the data graph it denotes (the data graph being validated).
 pub fn parse_data(turtle: &str) -> Result<MemGraph, String> {
-    parse_turtle(turtle)
+    parse_turtle(turtle, None)
 }
 
-fn parse_turtle(turtle: &str) -> Result<MemGraph, String> {
+/// Like [`parse_data`] but resolving relative IRIs against `base`.
+pub fn parse_data_with_base(turtle: &str, base: &str) -> Result<MemGraph, String> {
+    parse_turtle(turtle, Some(base))
+}
+
+fn parse_turtle(turtle: &str, base: Option<&str>) -> Result<MemGraph, String> {
+    let mut parser = oxttl::TurtleParser::new();
+    if let Some(b) = base {
+        parser = parser.with_base_iri(b).map_err(|e| e.to_string())?;
+    }
     let mut g = MemGraph::new();
-    for t in oxttl::TurtleParser::new().for_slice(turtle.as_bytes()) {
+    for t in parser.for_slice(turtle.as_bytes()) {
         let t = t.map_err(|e| e.to_string())?;
         let subject = match t.subject {
             NamedOrBlankNode::NamedNode(n) => Term::NamedNode(n),
@@ -231,10 +247,12 @@ fn parse_constraints(g: &MemGraph, node: &Term) -> Vec<Constraint> {
     let mut out = Vec::new();
     for (primary, component, secondary) in COMPONENTS {
         let primary_pred = sh(primary);
-        let primary_values = param_values(g, node, primary, &primary_pred);
-        if primary_values.is_empty() {
+        // Presence is by predicate, not flattened values: an empty list param (e.g. `sh:in ()`,
+        // `sh:xone ()`) is still a declared constraint with defined semantics.
+        if g.objects(node, &primary_pred).is_empty() {
             continue;
         }
+        let primary_values = param_values(g, node, primary, &primary_pred);
         let mut params: Vec<(NamedNode, Term)> = primary_values
             .into_iter()
             .map(|v| (primary_pred.clone(), v))
