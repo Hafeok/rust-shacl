@@ -9,7 +9,10 @@ single source of truth.
 
 ```toml
 [dependencies]
-shacl-oxigraph = { path = "../rust-shacl/shacl-oxigraph" }   # or a git rev
+# released tag (recommended for downstream consumers):
+shacl-oxigraph = { git = "https://github.com/Hafeok/rust-shacl", tag = "v0.1.0" }
+# or, for local/path development:
+# shacl-oxigraph = { path = "../rust-shacl/shacl-oxigraph" }
 # pulls in shacl-core, shacl-model, shacl-sparql transitively
 ```
 
